@@ -1,0 +1,98 @@
+
+`timescale 1ps/1ps
+
+module alu_testbench();
+
+reg clk;
+reg [31:0] rs1;
+reg [31:0] rs2;
+wire [31:0] rd;
+reg [2:0] op;
+wire done;
+reg start;
+
+reg logic [2:0] func3;
+reg logic [6:0] func7;
+reg logic imm_t;
+
+initial begin
+    $dumpfile("test.vcd");
+    $dumpvars(0,alu_testbench);
+    $display("------------Initializing------------");
+    clk = 0;
+    rs1 = 0;
+    func3 = 0;
+    func7 = 0;
+    imm_t = 0;
+    rs2 = 0;
+    start = 0;
+    $display("----------Done Initializing---------");
+    forever begin
+        #10 clk = ~clk; 
+    end
+end
+
+alu alu0
+(
+    .clk(clk),
+    .rs1(rs1),
+    .rs2(rs2),
+    .rd(rd),
+    .func3(func3),
+    .func7(func7),
+    .imm_t(imm_t),
+    .done(done),
+    .start(start)
+);
+
+
+typedef enum logic[3:0] { START, WAIT, SCORE } states_t;
+
+states_t state = START;
+
+parameter N_TESTS = 32;
+
+reg [31:0] counter = 0;
+
+always@(negedge clk)
+begin
+    case(state)
+        START:
+        begin
+            start = 1'b1;
+            state = WAIT;
+        end
+        WAIT:
+        begin
+            start = 1'b0;
+            if(done)
+            begin
+                if(rd == (rs1 + rs2))
+                begin
+                    $display("PASS: RD value is 0x%08x and expected 0x%08x", rd, rs1 + rs2);
+                    rs1 = $urandom();
+                    rs2 = $urandom();
+                    if(counter > N_TESTS)
+                    begin
+                        $stop;
+                    end
+                    counter = counter + 1;
+                end
+                else 
+                begin
+                    $display("Error: RD value is 0x%08x but expected 0x%08x", rd, rs1 + rs2);
+                    $display("S1: 0B%b", rs1);
+                    $display("S2: 0B%b", rs2);
+                    $display("RD: 0B%b", rd);
+                    $display("EX: 0B%b XOR", rs1 + rs2);
+                    $display("----------------------------------");
+                    $display("DF: 0B%b", rd ^ (rs1 + rs2));
+                    $stop;
+                end
+                state = START;
+            end
+        end
+    endcase
+end
+
+endmodule
