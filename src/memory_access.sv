@@ -2,7 +2,7 @@
 //Sun, Jun, 13 
 //8:42AM
 
-import global_pkg::memory_operation_t;
+import global_pkg::*;
 
 module memory_access
 (
@@ -14,6 +14,7 @@ module memory_access
     input  memory_operation_t memory_operation,
     input  logic cyc,
     output logic ack,
+    output logic err, //This signal tells the control unit that there was an error.
     output logic data_valid, //This is needed for the load instruction
     input  logic [2:0] funct3,
 
@@ -150,11 +151,47 @@ module memory_access
 //              | |                                       | |                                          | |                                 
 //           DATA OUT                                  DATA OUT                                     DATA OUT                                
 
+
+
+//Register to store the carry signal of the adder.
+//One of the optimizations of this design will require a 1bit adder instead of a 32bit one to calculate the address of the next data block.
+full_adder full_adder_1
+(
+    .a(rs1_b),
+    .b(xor_w),
+    .cin(carry),
+    .cout(cout),
+    .z(add)
+);
+
+
 //Shift register
 reg [63:0] shift_reg;
 
 //Write Enable Mask
 logic [3:0] mask;
+
+//Assign load data to the output port of the shift register
+//assign load_data = shift_reg[31:0];
+
+wire [31:0] ALIGNED_BYTE = {(shift_reg [7:7])? 24'hffffff : 24'h0, shift_reg [7:0]};
+wire [31:0] ALIGNED_U_BYTE = {24'h0, shift_reg [7:0]};
+wire [31:0] ALIGNED_HALF_WORD = {(shift_reg [15:15])? 16'hffff : 16'h0, shift_reg [15:0]};
+wire [31:0] ALIGNED_U_HALF_WORD = {16'h0, shift_reg [15:0]};
+wire [31:0] ALIGNED_WORD_BUS = shift_reg[31:0];
+
+//Multiplexer to choose between the load bus
+always_comb
+begin
+    case(funct3)
+        LB: load_data = ALIGNED_BYTE;
+        LH: load_data = ALIGNED_HALF_WORD;
+        LW: load_data = ALIGNED_WORD_BUS;
+        LBU: load_data = ALIGNED_U_BYTE;
+        LHU: load_data = ALIGNED_U_HALF_WORD;
+        default: load_data = 32'h00000000;
+    endcase
+end
 
 //Memory access, these are the opcodes of the load and store instructions
 parameter LB = 3'b000;
@@ -168,7 +205,6 @@ parameter SH = 3'b001;
 parameter SW = 3'b010;
 
 //Unaligned access is true if accessing more than a byte and unaligned address
-typedef enum logic [1:0] { BYTE, HALF_WORD, WORD } access_size_t;
 access_size_t access_size; 
 always_comb
 begin
@@ -182,51 +218,209 @@ begin
     endcase
 end
 
-wire unaligned = ((address [1:0] >= 3) & (access_size != BYTE))? 1 : 0;
+wire unaligned = (((address [1:0] == 3) & (access_size != BYTE)) | ((address [1:0] != 0) & (access_size == WORD)))? 1 : 0;
 
 
 //States for the state machine
-typedef enum logic[3:0] { IDDLE, LOAD_H1, LOAD_H2, STORE_LOAD_H1, STORE_LOAD_H2, STORE_H1, STORE_H2 } states_t;
+typedef enum logic[3:0] { IDDLE, LOAD_H1, ROTATE_H2, ALIGN, LOAD_CALC_ADDR, STORE_CALC_ADDR, LOAD_H2, STORE_LOAD_H1, STORE_LOAD_H2, STORE_H1, STORE_H2 } states_t;
 
-states_t states = IDDLE;
 
-reg [4:0] count; //This register counts how many times data is being shifted
+states_t state = IDDLE;
+
+reg [5:0] count; //This register counts how many times data is being shifted
 
 
 always@(posedge clk)
 begin
-    case(states)
+    case(state)
         IDDLE:
         begin
-            if(CYC)
+            data_valid = 0;
+            count = 0;
+            if(cyc)
             begin
                 data_valid = 0;
                 //Depending on memory operations
                 ack = 1'b1;
+                err = 1'b0;
                 //Now we can deconde memory_operation
                 case(memory_operation)
-                    MEM_NONE: ;//Just do nothing
+                    MEM_NONE: state = IDDLE;//Just do nothing
                     LOAD_DATA:
                     begin
-                        
+                        if(unaligned)
+                        begin
+                            //This is to load the upper block into the shift register, so later it can be shifted
+                            state = LOAD_H2;
+                        end
+                        else
+                        begin
+                            state = LOAD_H1;
+                        end
                     end
-                    STORE_DATA
+                    STORE_DATA:
                     begin
-                        
+                        if(unaligned)
+                        begin
+                            //This is to load the upper block into the shift register, so later it can be shifted
+                            state = LOAD_H2;
+                        end
+                        else
+                        begin
+                            state = LOAD_H1;
+                        end
                     end
                 endcase
             end
         end
-        LOAD_H2:
+        //Calculates the address of the next block of data by using a single bit adder.
+        LOAD_CALC_ADDR:
         begin
             
         end
+        LOAD_H2:
+        begin
+            ack = 1'b0;
+            CYC = 1'b1;
+            STB = 1'b1; 
+            WE = 1'b0;
+            //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
+            ADR = {(address[31:2] + 30'b1), 2'b0};
+            
+            //wait for termination signals
+            //ACK termination signals are reported back to the control unit
+            if(ACK)
+            begin
+                shift_reg[31:0] = DAT_I;
+                //Now is can rotate to align data
+                state = ROTATE_H2;
+                count = 0; //Reset counter so it can be used in the next statea
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+            //Error termination signals are reported back to the control unit
+            else if(ERR)
+            begin
+                //Go back to IDDLE. Cycle terminated.
+                state = IDDLE;
+                err = 1'b1;
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+            //Retry termination signals are handled automatically
+            else if(RTY)
+            begin
+                //Stop cycle signals
+                CYC = 1'b0;
+                STB = 1'b0; 
+                //Retry
+                state = LOAD_H2;
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+        end
+        ROTATE_H2:
+        begin
+            //Stop until data was shifted for 32 cycles
+            if(count < 32)
+            begin
+                //Rotate left
+                shift_reg[63:0] = {shift_reg[0:0], shift_reg[63:1]};
+                count = count + 1;
+            end
+            else
+            begin
+                //Stop rotating
+                state = LOAD_H1;
+                count = 0;
+            end
+        end
         LOAD_H1:
+        begin
+            ack = 1'b0;
+            CYC = 1'b1;
+            STB = 1'b1; 
+            WE = 1'b0;
+            //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
+            ADR = {address[31:2], 2'b0};
+            
+            //wait for termination signals
+            //ACK termination signals are reported back to the control unit
+            if(ACK)
+            begin
+                shift_reg[31:0] = DAT_I;
+                //Now is can rotate to align data
+                state = ALIGN;
+                count = 0; //Reset counter so it can be used in the next statea
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+            //Error termination signals are reported back to the control unit
+            else if(ERR)
+            begin
+                //Go back to IDDLE. Cycle terminated.
+                state = IDDLE;
+                err = 1'b1;
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+            //Retry termination signals are handled automatically
+            else if(RTY)
+            begin
+                //Stop cycle signals
+                CYC = 1'b0;
+                STB = 1'b0; 
+                //Retry
+                state = LOAD_H1;
+                //Reset counter so it can be used in the next cycle
+                count = 0;
+                //Stop wishbone cycle
+                CYC = 1'b0;
+                STB = 1'b0; 
+                WE = 1'b0;
+            end
+        end
+        ALIGN:
+        begin
+            //Rotate data until its aligned
+            if(count < 5'(address[1:0] << 3))
+            begin
+                //Rotate left
+                shift_reg[63:0] = {shift_reg[0:0], shift_reg[63:1]};
+                count = count + 1;
+            end
+            else
+            begin
+                //Stop rotating
+                state = IDDLE;
+                //Signal the control unit that data is ready
+                //The control unit has to see this instantly after a cycle
+                data_valid = 1'b1;
+            end
+
+        end
+        STORE_LOAD_H2:
+        begin
+            
+        end
+        STORE_LOAD_H1:
         begin
             
         end
     endcase
 end
 
+wire [5:0] align_by;
+assign align_by = 5'(address[1:0]) << 3;
 
 endmodule
