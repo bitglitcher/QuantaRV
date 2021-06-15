@@ -265,11 +265,11 @@ begin
                         if(unaligned)
                         begin
                             //This is to load the upper block into the shift register, so later it can be shifted
-                            state = LOAD_H2;
+                            state = STORE_LOAD_H2;
                         end
                         else
                         begin
-                            state = LOAD_H1;
+                            state = STORE_LOAD_H1;
                         end
                     end
                 endcase
@@ -488,7 +488,7 @@ begin
             begin
                 shift_reg[31:0] = DAT_I;
                 //Now is can rotate to align data
-                state = ALIGN;
+                state = STORE_ALIGN;
                 count = 0; //Reset counter so it can be used in the next statea
                 //Stop wishbone cycle
                 CYC = 1'b0;
@@ -563,7 +563,7 @@ begin
         STORE_ROTATE_BACK:
         begin
             //Rotate data until its aligned
-            if(count < (64 - 5'(address[1:0] << 3)))
+            if((count < (64 - 5'(address[1:0] << 3))) & ~(5'(address[1:0] << 3) == 0))
             begin
                 //Rotate left
                 shift_reg[63:0] = {shift_reg[0:0], shift_reg[63:1]};
@@ -581,12 +581,19 @@ begin
             WE = 1'b1;
             CYC = 1'b1;
             STB = 1'b1;
-            DAT_O = shift_reg [31:0];
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER in space limited desings
             ADR = {address[31:2], 2'b0};
             if(ACK)
             begin
-                state = ROTATE_BACK_H2; //This state will place H2 into H1 so it can be accessed
+                if(unaligned)
+                begin
+                    state = ROTATE_BACK_H2; //This state will place H2 into H1 so it can be accessed
+                end
+                else
+                begin
+                    state = IDDLE;
+                    done = 1'b1;
+                end
                 WE = 1'b0;
                 CYC = 1'b0;
                 STB = 1'b0;
@@ -630,9 +637,8 @@ begin
             WE = 1'b1;
             CYC = 1'b1;
             STB = 1'b1;
-            DAT_O = shift_reg [31:0];
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER in space limited desings
-            ADR = {address[31:2], 2'b0};
+            ADR = {address[31:2] + 30'b1, 2'b0};
             if(ACK)
             begin
                 //After storing H2, the whole store operation is done.
@@ -664,7 +670,10 @@ begin
     endcase
 end
 
+//To save some resources on latches
+assign DAT_O = shift_reg [31:0];
+
 wire [5:0] align_by;
-assign align_by = 5'(address[1:0]) << 3;
+assign align_by = (5'(address[1:0]) << 3);
 
 endmodule

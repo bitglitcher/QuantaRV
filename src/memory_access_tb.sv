@@ -20,6 +20,7 @@ logic cyc;
 logic ack;
 logic err; //This signal tells the control unit that there was an error.
 logic data_valid; //This is needed for the load instruction
+logic done; 
 logic [2:0] funct3;
 
 //Data
@@ -45,8 +46,8 @@ wire [31:0] memory_l = {memory[3], memory[2], memory[1], memory[0]};
 wire [31:0] memory_h = {memory[7], memory[6], memory[5], memory[4]};
 
 initial begin
-    $dumpfile("memory_access_tb.vcd");
-    $dumpvars(0,memory_access_tb);
+    //$dumpfile("memory_access_tb.vcd");
+    //$dumpvars(0,memory_access_tb);
     funct3 = 0;
     cyc = 0;
     clk = 0;    
@@ -78,6 +79,7 @@ memory_access memory_access_0
     .ack(ack),
     .err(err), //This signal tells the control unit that there was an error.
     .data_valid(data_valid), //This is needed for the load instruction
+    .done(done), 
     .funct3(funct3),
 
     //Data
@@ -138,207 +140,546 @@ begin
         WAIT:
         begin
             cyc = 1'b0;
-            //Wait until data valid
-            if(data_valid)
+            if(memory_operation == LOAD_DATA)
             begin
-                //Check if data was loaded corretly
-                case(funct3)
-                    LB:
-                    begin
-                        //First align data accordingly to the address;
-                        if(load_data == 32'($signed(memory[address[2:0]]))) 
+                //Wait until data valid
+                if(data_valid)
+                begin
+                    //Check if data was loaded corretly
+                    case(funct3)
+                        LB:
                         begin
-                            $display("LB PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed(memory[address[2:0]])));
-                            //Initialize memory with random values
-                            memory[0] = $random();
-                            memory[1] = $random();
-                            memory[2] = $random();
-                            memory[3] = $random();
-                            memory[4] = $random();
-                            memory[5] = $random();
-                            memory[6] = $random();
-                            memory[7] = $random();
-                            address = $random();
-                            state = IDDLE;
-                            if(test_cnt > TEST_COUNT)
+                            //First align data accordingly to the address;
+                            if(load_data == 32'($signed(memory[address[2:0]]))) 
                             begin
-                                funct3 = LH;
-                                test_cnt = 0;
+                                $display("LB PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed(memory[address[2:0]])));
+                                //Initialize memory with random values
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = LH;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
                             end
                             else
                             begin
-                                test_cnt = test_cnt + 1;
+                                $display("LB Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed(memory[address[2:0]])));
+                                $stop;
                             end
                         end
-                        else
+                        LH:
                         begin
-                            $display("LB Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed(memory[address[2:0]])));
-                            $stop;
-                        end
-                    end
-                    LH:
-                    begin
-                        //First align data accordingly to the address;
-                        if(load_data == 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}))) 
-                        begin
-                            $display("LH PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})));
-                            //Initialize memory with random values
-                            memory[0] = $random();
-                            memory[1] = $random();
-                            memory[2] = $random();
-                            memory[3] = $random();
-                            memory[4] = $random();
-                            memory[5] = $random();
-                            memory[6] = $random();
-                            memory[7] = $random();
-                            address = $random();
-                            state = IDDLE;
-                            if(test_cnt > TEST_COUNT)
+                            //First align data accordingly to the address;
+                            if(load_data == 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}))) 
                             begin
-                                funct3 = LW;
-                                test_cnt = 0;
+                                $display("LH PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})));
+                                //Initialize memory with random values
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = LW;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
                             end
                             else
                             begin
-                                test_cnt = test_cnt + 1;
-                            end
+                                $display("LH Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})));
+                                $stop;
+                            end                        
                         end
-                        else
+                        LW:
                         begin
-                            $display("LH Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'($signed({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})));
-                            $stop;
-                        end                        
-                    end
-                    LW:
-                    begin
-                        //First align data accordingly to the address;
-                        if(load_data == {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]}) 
-                        begin
-                            $display("LW PASS: Got value 0x%08x, and expected 0x%08x", load_data, {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]});
-                            //Initialize memory with random values
-                            memory[0] = $random();
-                            memory[1] = $random();
-                            memory[2] = $random();
-                            memory[3] = $random();
-                            memory[4] = $random();
-                            memory[5] = $random();
-                            memory[6] = $random();
-                            memory[7] = $random();
-                            address = $random();
-                            state = IDDLE;
-                            if(test_cnt > TEST_COUNT)
+                            //First align data accordingly to the address;
+                            if(load_data == {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]}) 
                             begin
-                                funct3 = LBU;
-                                test_cnt = 0;
+                                $display("LW PASS: Got value 0x%08x, and expected 0x%08x", load_data, {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]});
+                                //Initialize memory with random values
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = LBU;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
                             end
                             else
                             begin
-                                test_cnt = test_cnt + 1;
-                            end
+                                $display("LW Error: Got value 0x%08x, and expected 0x%08x", load_data, {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]});
+                                $stop;
+                            end                        
                         end
-                        else
+                        LBU:
                         begin
-                            $display("LW Error: Got value 0x%08x, and expected 0x%08x", load_data, {memory[3'(address[2:0])+3'b11], memory[3'(address[2:0])+3'b10], memory[3'(address[2:0])+3'b1], memory[address[2:0]]});
-                            $stop;
-                        end                        
-                    end
-                    LBU:
-                    begin
-                        //First align data accordingly to the address;
-                        if(load_data == 32'(memory[address[2:0]])) 
-                        begin
-                            $display("LBU PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'(memory[address[2:0]]));
-                            //Initialize memory with random values
-                            memory[0] = $random();
-                            memory[1] = $random();
-                            memory[2] = $random();
-                            memory[3] = $random();
-                            memory[4] = $random();
-                            memory[5] = $random();
-                            memory[6] = $random();
-                            memory[7] = $random();
-                            address = $random();
-                            state = IDDLE;
-                            if(test_cnt > TEST_COUNT)
+                            //First align data accordingly to the address;
+                            if(load_data == 32'(memory[address[2:0]])) 
                             begin
-                                funct3 = LHU;
-                                test_cnt = 0;
+                                $display("LBU PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'(memory[address[2:0]]));
+                                //Initialize memory with random values
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = LHU;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
                             end
                             else
                             begin
-                                test_cnt = test_cnt + 1;
+                                $display("LBU Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'(memory[address[2:0]]));
+                                $stop;
                             end
                         end
-                        else
+                        LHU:
                         begin
-                            $display("LBU Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'(memory[address[2:0]]));
-                            $stop;
-                        end
-                    end
-                    LHU:
-                    begin
-                        //First align data accordingly to the address;
-                        if(load_data == 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})) 
-                        begin
-                            $display("LHU PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}));
-                            //Initialize memory with random values
-                            memory[0] = $random();
-                            memory[1] = $random();
-                            memory[2] = $random();
-                            memory[3] = $random();
-                            memory[4] = $random();
-                            memory[5] = $random();
-                            memory[6] = $random();
-                            memory[7] = $random();
-                            address = $random();
-                            store_data = $random();
-                            state = IDDLE;
-                            if(test_cnt > TEST_COUNT)
+                            //First align data accordingly to the address;
+                            if(load_data == 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]})) 
                             begin
-                                funct3 = SB;
-                                test_cnt = 0;
+                                $display("LHU PASS: Got value 0x%08x, and expected 0x%08x", load_data, 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}));
+                                //Initialize memory with random values
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                store_data = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = SB;
+                                    memory_operation = STORE_DATA;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
                             end
                             else
                             begin
-                                test_cnt = test_cnt + 1;
-                            end
+                                $display("LHU Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}));
+                                $stop;
+                            end                        
                         end
-                        else
+                    endcase
+                end
+            end
+            else if(memory_operation == STORE_DATA)
+            begin                
+                if(done)
+                begin
+                    case(funct3)
+                        SB:
                         begin
-                            $display("LHU Error: Got value 0x%08x, and expected 0x%08x", load_data, 32'({memory[3'(address[2:0])+3'b1], memory[address[2:0]]}));
-                            $stop;
-                        end                        
-                    end
-                    SB:
-                    begin
-                        bit [7:0] memory_tmp [7:0];
-                        memory_tmp[0] = memory[0];
-                        memory_tmp[1] = memory[1];
-                        memory_tmp[2] = memory[2];
-                        memory_tmp[3] = memory[3];
-                        memory_tmp[4] = memory[4];
-                        memory_tmp[5] = memory[5];
-                        memory_tmp[6] = memory[6];
-                        memory_tmp[7] = memory[7];
-                        //Modify correspoding byte
-                        memory_tmp[address[2:0]] = store_data[7:0];
+                            bit [7:0] memory_tmp [7:0];
+                            memory_tmp[0] = memory[0];
+                            memory_tmp[1] = memory[1];
+                            memory_tmp[2] = memory[2];
+                            memory_tmp[3] = memory[3];
+                            memory_tmp[4] = memory[4];
+                            memory_tmp[5] = memory[5];
+                            memory_tmp[6] = memory[6];
+                            memory_tmp[7] = memory[7];
+                            //Modify correspoding byte
+                            memory_tmp[address[2:0]] = store_data[7:0];
 
-                        //Compare memory modified by the testbench to that of the memory_access unit
-                        if(done)
-                        begin
-                            
+                            //Compare memory modified by the testbench to that of the memory_access unit
+                            //Compare the values from both memory arrays
+                            if( (memory_tmp[0] == memory[0]) &
+                            (memory_tmp[1] == memory[1]) &
+                            (memory_tmp[2] == memory[2]) &
+                            (memory_tmp[3] == memory[3]) &
+                            (memory_tmp[4] == memory[4]) &
+                            (memory_tmp[5] == memory[5]) &
+                            (memory_tmp[6] == memory[6]) &
+                            (memory_tmp[7] == memory[7]) )
+                            begin
+                                $display("SB PASS: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                store_data = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = SH;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
+                            end
+                            else
+                            begin
+                                $display("SB FAIL: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $display("WR: 0x%016x", store_data & 8'hff);
+                                $display("EX: 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                });
+                                $display("GT: 0x%016x", 
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $stop;
+                            end
                         end
-                    end
-                    SH:
-                    begin
-                        
-                    end
-                    SW:
-                    begin
-                        
-                    end
-                endcase
-                //Else post error
+                        SH:
+                        begin
+                            bit [7:0] memory_tmp [7:0];
+                            memory_tmp[0] = memory[0];
+                            memory_tmp[1] = memory[1];
+                            memory_tmp[2] = memory[2];
+                            memory_tmp[3] = memory[3];
+                            memory_tmp[4] = memory[4];
+                            memory_tmp[5] = memory[5];
+                            memory_tmp[6] = memory[6];
+                            memory_tmp[7] = memory[7];
+                            //Modify correspoding byte
+                            memory_tmp[address[2:0]] = store_data[7:0];
+                            memory_tmp[address[2:0]+1] = store_data[15:8];
+
+                            //Compare memory modified by the testbench to that of the memory_access unit
+                            //Compare the values from both memory arrays
+                            if( (memory_tmp[0] == memory[0]) &
+                            (memory_tmp[1] == memory[1]) &
+                            (memory_tmp[2] == memory[2]) &
+                            (memory_tmp[3] == memory[3]) &
+                            (memory_tmp[4] == memory[4]) &
+                            (memory_tmp[5] == memory[5]) &
+                            (memory_tmp[6] == memory[6]) &
+                            (memory_tmp[7] == memory[7]) )
+                            begin
+                                $display("SH PASS: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                store_data = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = SW;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
+                            end
+                            else
+                            begin
+                                $display("SH FAIL: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $display("A : 0x%016x : 0B%032b", address, address);
+                                $display("WR: 0x%016x", store_data & 16'hffff);
+                                $display("EX: 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                });
+                                $display("GT: 0x%016x", 
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $stop;
+                            end
+                        end
+                        SW:
+                        begin
+                            bit [7:0] memory_tmp [7:0];
+                            memory_tmp[0] = memory[0];
+                            memory_tmp[1] = memory[1];
+                            memory_tmp[2] = memory[2];
+                            memory_tmp[3] = memory[3];
+                            memory_tmp[4] = memory[4];
+                            memory_tmp[5] = memory[5];
+                            memory_tmp[6] = memory[6];
+                            memory_tmp[7] = memory[7];
+                            //Modify correspoding byte
+                            memory_tmp[address[2:0]]   = store_data[7:0];
+                            memory_tmp[address[2:0]+1] = store_data[15:8];
+                            memory_tmp[address[2:0]+2] = store_data[23:16];
+                            memory_tmp[address[2:0]+3] = store_data[31:24];
+                            //memory_tmp[address[2:0]+3:address[2:0]+3] = store_data;
+
+                            //Compare memory modified by the testbench to that of the memory_access unit
+                            //Compare the values from both memory arrays
+                            if( (memory_tmp[0] == memory[0]) &
+                            (memory_tmp[1] == memory[1]) &
+                            (memory_tmp[2] == memory[2]) &
+                            (memory_tmp[3] == memory[3]) &
+                            (memory_tmp[4] == memory[4]) &
+                            (memory_tmp[5] == memory[5]) &
+                            (memory_tmp[6] == memory[6]) &
+                            (memory_tmp[7] == memory[7]) )
+                            begin
+                                $display("SW PASS: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                memory[0] = $random();
+                                memory[1] = $random();
+                                memory[2] = $random();
+                                memory[3] = $random();
+                                memory[4] = $random();
+                                memory[5] = $random();
+                                memory[6] = $random();
+                                memory[7] = $random();
+                                address = $random();
+                                store_data = $random();
+                                state = IDDLE;
+                                if(test_cnt > TEST_COUNT)
+                                begin
+                                    funct3 = SB;
+                                    memory_operation = LOAD_DATA;
+                                    test_cnt = 0;
+                                end
+                                else
+                                begin
+                                    test_cnt = test_cnt + 1;
+                                end
+                            end
+                            else
+                            begin
+                                $display("SW FAIL: Memory is 0x%016x and expected 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                },
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $display("A : 0x%016x : 0B%032b", address, address);
+                                $display("WR: 0x%016x", store_data & 16'hffff);
+                                $display("EX: 0x%016x", 
+                                {
+                                    memory_tmp[0],
+                                    memory_tmp[1],
+                                    memory_tmp[2],
+                                    memory_tmp[3],
+                                    memory_tmp[4],
+                                    memory_tmp[5],
+                                    memory_tmp[6],
+                                    memory_tmp[7]
+                                });
+                                $display("GT: 0x%016x", 
+                                {
+                                    memory[0],
+                                    memory[1],
+                                    memory[2],
+                                    memory[3],
+                                    memory[4],
+                                    memory[5],
+                                    memory[6],
+                                    memory[7]
+                                });
+                                $stop;
+                            end
+                        end
+                    endcase
+                end
             end
         end
     endcase
@@ -359,7 +700,7 @@ begin
         ERR = 1'b0;   
         if(WE)
         begin
-            {memory[address[1:0]+3'h3], memory[address[1:0]+3'h2], memory[address[1:0]+3'h1], memory[address[1:0]]} = DAT_O;
+            {memory[{ADR[2:2], 2'b0} + 3'h3], memory[{ADR[2:2], 2'b0} + 3'h2], memory[{ADR[2:2], 2'b0} + 3'h1], memory[{ADR[2:2], 2'b0}]} = DAT_O;
         end
     end
     else
