@@ -15,7 +15,7 @@ logic clk;
 logic rst;
 
 //Control signals
-memory_operation_t memory_operation;
+memory_operation_t memory_operation = LOAD_DATA;
 logic cyc;
 logic ack;
 logic err; //This signal tells the control unit that there was an error.
@@ -60,6 +60,7 @@ initial begin
     memory[6] = $random();
     memory[7] = $random();
     address = $random();
+    store_data = $random();
     forever begin
         #10 clk = ~clk;
     end
@@ -101,7 +102,7 @@ memory_access memory_access_0
 
 );
 
-typedef enum logic [1:0] { IDDLE, LOAD_WAIT, STORE } state_t;
+typedef enum logic [1:0] { IDDLE, WAIT} state_t;
 
 state_t state = IDDLE;
 
@@ -123,44 +124,18 @@ reg [31:0] test_cnt = 0;
 always@(negedge clk)
 begin
 
-    //if(state == LOAD)
-    //begin
-    //    //Chose from one of the access operations
-    //    if(funct3 > 3'b101)
-    //    begin
-    //        state = STORE;
-    //    end
-    //    funct3 = funct3 + 1; //To iterate through all access sizes
-    //end
-    //else if(state == STORE)
-    //begin
-    //    //Chose from one of the access operations
-    //    if(funct3 > 3'b010)
-    //    begin
-    //        funct3 = 0;
-    //        state = LOAD;
-    //    end
-    //    funct3 = funct3 + 1; //To iterate through all access sizes
-    //end
-    //else
-    //begin
-    //    state = LOAD;
-    //    funct3 = 0;
-    //end
-
     case(state)
         IDDLE:
         begin
             cyc = 1'b1; //Start the access cycle
-            //Set the memory access unit into load mode 
-            memory_operation = LOAD_DATA;
             if(ack)
             begin
                 //waits until the memory access unit finishes fetching data
-                state = LOAD_WAIT; 
+                state = WAIT; 
             end
+            //Set the memory access unit into store mode 
         end
-        LOAD_WAIT:
+        WAIT:
         begin
             cyc = 1'b0;
             //Wait until data valid
@@ -316,6 +291,7 @@ begin
                             memory[6] = $random();
                             memory[7] = $random();
                             address = $random();
+                            store_data = $random();
                             state = IDDLE;
                             if(test_cnt > TEST_COUNT)
                             begin
@@ -333,15 +309,37 @@ begin
                             $stop;
                         end                        
                     end
+                    SB:
+                    begin
+                        bit [7:0] memory_tmp [7:0];
+                        memory_tmp[0] = memory[0];
+                        memory_tmp[1] = memory[1];
+                        memory_tmp[2] = memory[2];
+                        memory_tmp[3] = memory[3];
+                        memory_tmp[4] = memory[4];
+                        memory_tmp[5] = memory[5];
+                        memory_tmp[6] = memory[6];
+                        memory_tmp[7] = memory[7];
+                        //Modify correspoding byte
+                        memory_tmp[address[2:0]] = store_data[7:0];
+
+                        //Compare memory modified by the testbench to that of the memory_access unit
+                        if(done)
+                        begin
+                            
+                        end
+                    end
+                    SH:
+                    begin
+                        
+                    end
+                    SW:
+                    begin
+                        
+                    end
                 endcase
                 //Else post error
             end
-        end
-        STORE:
-        begin
-            //Set the memory access unit into store mode 
-            memory_operation = STORE_DATA;
-            
         end
     endcase
 end
