@@ -239,6 +239,8 @@ begin
             done = 1'b0;
             data_valid = 0;
             count = 0;
+            ack = 1'b0;
+            err = 1'b0;
             if(cyc)
             begin
                 data_valid = 0;
@@ -248,6 +250,18 @@ begin
                 //Now we can deconde memory_operation
                 case(memory_operation)
                     MEM_NONE: state = IDDLE;//Just do nothing
+                    FETCH_DATA:
+                    begin
+                        if(unaligned)
+                        begin
+                            //This is to load the upper block into the shift register, so later it can be shifted
+                            state = LOAD_H2;
+                        end
+                        else
+                        begin
+                            state = LOAD_H1;
+                        end
+                    end
                     LOAD_DATA:
                     begin
                         if(unaligned)
@@ -287,7 +301,7 @@ begin
             STB = 1'b1; 
             WE = 1'b0;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
-            ADR = {(address[31:2] + 30'b1), 2'b0};
+            ADR = address[31:0] + 4;
             
             //wait for termination signals
             //ACK termination signals are reported back to the control unit
@@ -350,7 +364,7 @@ begin
             STB = 1'b1; 
             WE = 1'b0;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
-            ADR = {address[31:2], 2'b0};
+            ADR = address[31:0];
             
             //wait for termination signals
             //ACK termination signals are reported back to the control unit
@@ -417,7 +431,7 @@ begin
             STB = 1'b1; 
             WE = 1'b0;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
-            ADR = {(address[31:2] + 30'b1), 2'b0};
+            ADR = (address[31:0] + 4);
             
             //wait for termination signals
             //ACK termination signals are reported back to the control unit
@@ -480,7 +494,7 @@ begin
             STB = 1'b1; 
             WE = 1'b0;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER
-            ADR = {address[31:2], 2'b0};
+            ADR = address[31:0];
             
             //wait for termination signals
             //ACK termination signals are reported back to the control unit
@@ -582,7 +596,7 @@ begin
             CYC = 1'b1;
             STB = 1'b1;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER in space limited desings
-            ADR = {address[31:2], 2'b0};
+            ADR = address[31:0];
             if(ACK)
             begin
                 if(unaligned)
@@ -638,7 +652,7 @@ begin
             CYC = 1'b1;
             STB = 1'b1;
             //IMPORTANT, THIS LATER HAS TO BE CHANGED TO USE A 1bit ADDER in space limited desings
-            ADR = {address[31:2] + 30'b1, 2'b0};
+            ADR = address[31:0] + 4;
             if(ACK)
             begin
                 //After storing H2, the whole store operation is done.
