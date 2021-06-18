@@ -28,8 +28,12 @@ always @(posedge clk) begin
     unique case(state)
         IDDLE:
         begin
-            state = COMPARE;
             done = 1'b0;
+            jump = 1'b0;
+            if(start)
+            begin
+                state = COMPARE;
+            end
         end
         COMPARE:
         begin
@@ -37,22 +41,29 @@ always @(posedge clk) begin
             case(funct3)
                 BEQ:
                 begin
-                    if($signed(rs1) == $signed(rs1))
+                    if($signed(rs1) == $signed(rs2))
+                    begin
                         jump = 1'b1;
+                    end
                     else
+                    begin
                         jump = 1'b0;
+                    end
                 end
                 BNE:
                 begin
-                    if($signed(rs1) != $signed(rs1))
+                    if($signed(rs1) != $signed(rs2))
+                    begin
                         jump = 1'b1;
+                    end
                     else
+                    begin
                         jump = 1'b0;
-                    
+                    end
                 end
                 BLT:
                 begin
-                    if($signed(rs1) < $signed(rs1))
+                    if($signed(rs1) < $signed(rs2))
                         jump = 1'b1;
                     else
                         jump = 1'b0;
@@ -60,7 +71,7 @@ always @(posedge clk) begin
                 end
                 BGE:
                 begin
-                    if($signed(rs1) >= $signed(rs1))
+                    if($signed(rs1) >= $signed(rs2))
                         jump = 1'b1;
                     else
                         jump = 1'b0;
@@ -68,7 +79,7 @@ always @(posedge clk) begin
                 end
                 BLTU:
                 begin
-                    if(rs1 < rs1)
+                    if(rs1 < rs2)
                         jump = 1'b1;
                     else
                         jump = 1'b0;
@@ -76,13 +87,14 @@ always @(posedge clk) begin
                 end
                 BGEU:
                 begin
-                    if(rs1 >= rs1)
+                    if(rs1 >= rs2)
                         jump = 1'b1;
                     else
                         jump = 1'b0;
                     
                 end
             endcase
+            state = IDDLE;
         end
     endcase
 end
