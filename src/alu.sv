@@ -57,7 +57,7 @@ reg [3:0]  op_r = 0;
 reg [31:0] result = 0;
 reg [5:0] index = 0;
 
-typedef enum logic [3:0] { IDDLE, COMPUTE } alu_state_t;
+typedef enum logic [1:0] { IDDLE, COMPUTE } alu_state_t;
 
 alu_state_t state = IDDLE;
 
