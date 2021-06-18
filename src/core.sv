@@ -54,6 +54,10 @@ regfile_src_t regfile_src;
 sr2_src_t sr2_src;
 sr1_src_t sr1_src;
 
+logic bu_start;
+logic bu_done;
+logic jump;
+
 control_unit control_unit_0
 (
     .clk(clk),
@@ -88,7 +92,12 @@ control_unit control_unit_0
     .sr2_src(sr2_src),
     .sr1_src(sr1_src),
 
-    .alu_result(alu_out)
+    .alu_result(alu_out),
+
+    //Control signals for the branch unit
+    .bu_start(bu_start),
+    .jump(jump),
+    .bu_done(bu_done)
 );
 
 logic [31:0] IR;
@@ -120,6 +129,16 @@ decoder decoder_0
     .j_imm(j_imm)
 );
 
+branch_unit branch_unit_0
+(
+    .clk(clk),
+    .start(bu_start),
+    .rs1(rs1_d),
+    .rs2(rs2_d),
+    .funct3(funct3),
+    .done(bu_done),
+    .jump(jump)
+);
 
 //always_comb
 //begin

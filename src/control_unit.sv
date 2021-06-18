@@ -38,7 +38,12 @@ module control_unit
     //ALU input 2, data source
     output sr2_src_t sr2_src,
     output sr1_src_t sr1_src,
-    input logic [31:0] alu_result
+    input logic [31:0] alu_result,
+
+    //Control signals for the branch unit
+    output logic  bu_start,
+    input  logic  bu_done,
+    input  logic  jump
 );
 
 //Instruction Opcodes
@@ -100,6 +105,14 @@ parameter SRL =  4'b0101;
 parameter SRA =  4'b1101;
 parameter OR =   4'b0110;
 parameter AND =  4'b0111;
+
+//Branch unit opcodes
+parameter BEQ = 3'b000;
+parameter BNE = 3'b001;
+parameter BLT = 3'b100;
+parameter BGE = 3'b101;
+parameter BLTU = 3'b110;
+parameter BGEU = 3'b111;
 
 typedef enum logic [1:0] { CALC_NPC, SAVE_PC, CALC_TARGET, JUMP_TARGET } jalr_states_t;
 
@@ -198,7 +211,29 @@ always @(negedge clk) begin
                 end
                 BRANCH:
                 begin
-                    
+                    bu_start = 1'b1;
+                    if(bu_done)
+                    begin
+                        bu_start = 1'b0;
+                        if(jump)
+                        begin
+                            state = FETCH;
+                            //Set PC to target address
+                            PC = 
+                            32'($signed({ 
+                                IR [31:31],
+                                IR [30:25],
+                                IR [11:8],
+                                IR [7:7],
+                                1'b0
+                            }));
+                        end
+                        else
+                        begin
+                            state = INC; //Continue normal cycle
+                        end
+                        
+                    end
                 end
                 AUIPC:
                 begin                    
