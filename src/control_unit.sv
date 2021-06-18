@@ -116,9 +116,21 @@ parameter BGEU = 3'b111;
 
 typedef enum logic [1:0] { CALC_NPC, SAVE_PC, CALC_TARGET, JUMP_TARGET } jalr_states_t;
 
+//Memory access unit control state
+typedef enum logic { SET_OPERATION, WAIT} mauc_state_t;
+
+
+mauc_state_t mauc_state = SET_OPERATION;
+
 jalr_states_t jalr_states = SAVE_PC;
 
 wire [31:0] u_imm = {IR [31:12], 12'b000000000000};
+logic [12:0] b_imm;
+assign b_imm [0:0] = 1'b0;
+assign b_imm [11:11] = IR [7:7];
+assign b_imm [4:1] = IR [11:8];
+assign b_imm [10:5] = IR [30:25];
+assign b_imm [12:12] = IR [31:31];
 
 always @(negedge clk) begin
     if(rst)
@@ -128,12 +140,16 @@ always @(negedge clk) begin
         cyc = 1'b0;
         count = 0;
         memory_operation = MEM_NONE;
+        bu_start = 1'b0;
+        jalr_states = CALC_NPC;
+        mauc_state = SET_OPERATION;
     end
     case(state)
         FETCH:
         begin
             memory_operation = FETCH_DATA;
             funct3_cu <= LW;
+            bu_start = 1'b0;
             cyc = 1'b1;
             wr = 0;
             if(ack)
@@ -150,6 +166,7 @@ always @(negedge clk) begin
                 IR = fetched_data;
                 state = EXECUTE;
                 jalr_states = CALC_NPC;
+                mauc_state = SET_OPERATION;
             end
             else if(err)
             begin
@@ -168,10 +185,47 @@ always @(negedge clk) begin
                     //Set register file input multiplexer to load bus source
                     regfile_src = LOAD_SRC;
                     memory_operation = LOAD_DATA;
+                    case(mauc_state)
+                        SET_OPERATION:
+                        begin
+                            cyc = 1'b1;
+                            if(ack)
+                            begin
+                                mauc_state = WAIT;
+                            end 
+                        end
+                        WAIT:
+                        begin
+                            cyc = 1'b0;
+                            if(data_valid)
+                            begin
+                                wr = 1'b1;
+                                state = INC;
+                            end
+                        end
+                    endcase
                 end
                 STORE:
                 begin
                     memory_operation = STORE_DATA;
+                    case(mauc_state)
+                        SET_OPERATION:
+                        begin
+                            cyc = 1'b1;
+                            if(ack)
+                            begin
+                                mauc_state = WAIT;
+                            end
+                        end
+                        WAIT:
+                        begin
+                            cyc = 1'b0;
+                            if(done)
+                            begin
+                                state = INC;
+                            end
+                        end
+                    endcase
                     
                 end
                 OP_IMM:
@@ -219,14 +273,7 @@ always @(negedge clk) begin
                         begin
                             state = FETCH;
                             //Set PC to target address
-                            PC = 
-                            32'($signed({ 
-                                IR [31:31],
-                                IR [30:25],
-                                IR [11:8],
-                                IR [7:7],
-                                1'b0
-                            }));
+                            PC = PC + 32'($signed(b_imm));
                         end
                         else
                         begin
