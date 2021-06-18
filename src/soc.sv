@@ -49,7 +49,7 @@ core core0
 
 
     //Wishbone interface
-    .ACK(ACK),
+    .ACK((ADR < 4096)? ram_cyc : uart_ack),
     .ERR(ERR),
     .RTY(RTY),
     .STB(STB),
@@ -61,11 +61,16 @@ core core0
     .WE(WE)
 );
 
+logic ram_cyc = (ADR < 4096)? CYC : 1'b0;
+logic uart_cyc = (ADR == 32'hffff)? CYC : 1'b0;
+
+logic ram_ack;
+logic uart_ack;
 
 ram ram0
 (
     .clk(clk),
-    .ACK(ACK),
+    .ACK(ram_ack),
     .ERR(ERR),
     .RTY(RTY),
     .STB(STB),
@@ -77,6 +82,16 @@ ram ram0
     .WE(WE)
 );
 
-assign tx = ACK;
+always @(posedge clk) begin
+   if(uart_cyc & STB)
+   begin
+       uart_ack = 1'b1;
+       $write("%c", DAT_O & 32'hff);
+   end 
+   else
+   begin
+       uart_ack = 1'b0;
+   end
+end
 
 endmodule
