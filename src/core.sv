@@ -154,13 +154,14 @@ branch_unit branch_unit_0
 
 //Multiplexer to choose between the loaded data and the ALU
 always_comb begin
-    unique case (regfile_src)
+    case (regfile_src)
             ALU_INPUT: rd_d = alu_out;    //OP OP-IMM
             U_IMM_SRC: rd_d = u_imm;      //LUI
             //AUIPC_SRC: rd_d = u_imm + pc; //AUIPC
-            LOAD_SRC:  rd_d = load_data; //LOAD
+            LOAD_SRC: rd_d = load_data; //LOAD
             //PC_SRC:    rd_d = pc + 4; //JALR
             //CSR_SRC:   rd_d = 32'haeaeaeae;
+            default: rd_d = 32'b0;
     endcase
 end
 
@@ -219,8 +220,9 @@ begin
     unique case(memory_operation)
         //Address = rs1 + imm_i sign extended to 32bits
         FETCH_DATA:  address_ld = pc;
-        //LOAD_DATA: address_ld = rs1_d + 32'($signed(i_imm));
-        //STORE_DATA: address_ld = rs1_d + 32'($signed(s_imm));
+        //This operations should use the ALU to calculate values instead
+        LOAD_DATA: address_ld = rs1_d + 32'($signed(i_imm));
+        STORE_DATA: address_ld = rs1_d + 32'($signed(s_imm));
         //MEM_NONE: address_ld = 32'b0;
     endcase
 end
