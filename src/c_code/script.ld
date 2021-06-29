@@ -18,7 +18,7 @@ SEARCH_DIR("/mnt/c/Users/camin/Documents/opt/riscv/riscv64-unknown-elf/lib");
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x10000)); . = SEGMENT_START("text-segment", 0x10000) + SIZEOF_HEADERS;
+  PROVIDE (__executable_start = SEGMENT_START("text-segment", 4K)); . = SEGMENT_START("text-segment", 4K) + SIZEOF_HEADERS;
   /* >>> Our addition. <<< */
   PROVIDE(__stack_top = ORIGIN(RAM) + LENGTH(RAM));
   /* >>> End of our addition. <<< */
