@@ -1,6 +1,7 @@
 //Author: Benjamin Herrera Navarro
 //Fri Jun 4, 4:40PM
 
+`include "debug_def.sv"
 module regfile
 (
     input logic clk,
@@ -11,9 +12,14 @@ module regfile
     input logic [4:0] rs2,
     output logic [31:0] rs1_d,
     output logic [31:0] rs2_d
+
+        ,output logic [31:0][31:0] debug_reg
+    `ifdef __sim__
+    `endif
 );
 
 reg [31:0] registers [31:0];
+
 
 always @(posedge clk) begin
     if(wr & (rd != 0)) registers[rd] <= rd_d;
@@ -27,7 +33,6 @@ begin
     rs2_d <= registers [rs2];
 end
 
-`include "debug_def.sv"
 
 //This way we can debug the values in the registers
 `ifdef __sim__
@@ -38,10 +43,44 @@ initial begin
     end
 end
 
+
+assign debug_reg[0] = registers[0];
+assign debug_reg[1] = registers[1];
+assign debug_reg[2] = registers[2];
+assign debug_reg[3] = registers[3];
+assign debug_reg[4] = registers[4];
+assign debug_reg[5] = registers[5];
+assign debug_reg[6] = registers[6];
+assign debug_reg[7] = registers[7];
+assign debug_reg[8] = registers[8];
+assign debug_reg[9] = registers[9];
+assign debug_reg[10] = registers[10];
+assign debug_reg[11] = registers[11];
+assign debug_reg[12] = registers[12];
+assign debug_reg[13] = registers[13];
+assign debug_reg[14] = registers[14];
+assign debug_reg[15] = registers[15];
+assign debug_reg[16] = registers[16];
+assign debug_reg[17] = registers[17];
+assign debug_reg[18] = registers[18];
+assign debug_reg[19] = registers[19];
+assign debug_reg[20] = registers[20];
+assign debug_reg[21] = registers[21];
+assign debug_reg[22] = registers[22];
+assign debug_reg[23] = registers[23];
+assign debug_reg[24] = registers[24];
+assign debug_reg[25] = registers[25];
+assign debug_reg[26] = registers[26];
+assign debug_reg[27] = registers[27];
+assign debug_reg[28] = registers[28];
+assign debug_reg[29] = registers[29];
+assign debug_reg[30] = registers[30];
+assign debug_reg[31] = registers[31];
+//assign debug_reg = registers[31:0];
 //assert (registers[1] == 32'b0) 
 //else   $display("x0 is not zero");
 
-wire [31:0] r00 = registers[1];
+wire [31:0] r00 = registers[0];
 wire [31:0] r01 = registers[1];
 wire [31:0] r02 = registers[2];
 wire [31:0] r03 = registers[3];
