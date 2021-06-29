@@ -49,7 +49,7 @@ core core0
 
 
     //Wishbone interface
-    .ACK((ADR < 4096)? ram_cyc : uart_ack),
+    .ACK((ADR < 4096)? ram_ack : uart_ack),
     .ERR(ERR),
     .RTY(RTY),
     .STB(STB),
@@ -61,8 +61,8 @@ core core0
     .WE(WE)
 );
 
-logic ram_cyc = (ADR < 4096)? CYC : 1'b0;
-logic uart_cyc = (ADR == 32'hffff)? CYC : 1'b0;
+assign ram_cyc = (ADR < 4096)? CYC : 1'b0;
+assign uart_cyc = (ADR == 32'hffff)? CYC : 1'b0;
 
 logic ram_ack;
 logic uart_ack;
@@ -82,16 +82,30 @@ ram ram0
     .WE(WE)
 );
 
+typedef enum logic { IDDLE, TAKE } states_t;
+states_t state = IDDLE;
+
 always @(posedge clk) begin
-   if(uart_cyc & STB)
-   begin
-       uart_ack = 1'b1;
-       $write("%c", DAT_O & 32'hff);
-   end 
-   else
-   begin
-       uart_ack = 1'b0;
-   end
+
+    case(state)
+        IDDLE:
+        begin
+            if(uart_cyc & STB)
+            begin
+                uart_ack = 1'b1;
+                state = TAKE;
+            end 
+            else
+            begin
+                uart_ack = 1'b0;
+            end
+        end
+        TAKE:
+        begin
+            $write("%c", (DAT_O >> 24) & 32'hff);
+            state = IDDLE;
+        end
+    endcase
 end
 
 endmodule
