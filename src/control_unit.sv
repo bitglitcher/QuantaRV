@@ -43,7 +43,9 @@ module control_unit
     //Control signals for the branch unit
     output logic  bu_start,
     input  logic  bu_done,
-    input  logic  jump
+    input  logic  jump,
+
+    input logic [31:0] [31:0] debug_reg
 );
 
 //Instruction Opcodes
@@ -56,6 +58,11 @@ parameter AUIPC  = 7'b0010111;
 parameter LUI    = 7'b0110111;
 parameter JAL    = 7'b1101111;
 parameter JALR   = 7'b1100111;
+parameter SYSTEM = 7'b1110011;
+
+parameter ECALL = 12'b000000000000;
+parameter EBREAK = 12'b000000000001;
+parameter PRIV = 3'b000;
 
 //Reset vector, this is the address at which the PC resets to
 parameter RESET_VECTOR = 32'h00000000;//32'h80000000;
@@ -65,10 +72,81 @@ reg [31:0] IR = 0;
 reg [31:0] PC = 0;
 reg [31:0] CSRS [12'hfff:12'h0];
 
+
+//CSR register parameters
+parameter mvendorid = 12'hF11; //0xF11 MRO mvendorid Vendor ID.
+parameter marchid = 12'hF12; //0xF12 MRO marchid Architecture ID.
+parameter mimpid = 12'hF13; //0xF13 MRO mimpid Implementation ID.
+parameter mhartid = 12'hF14; //0xF14 MRO mhartid Hardware thread ID.
+//Machine Trap Setup
+parameter mstatus = 12'h300;//0x300 MRW mstatus Machine status register.
+parameter misa = 12'h301;//0x301 MRW misa ISA and extensions
+parameter medeleg = 12'h302;//0x302 MRW medeleg Machine exception delegation register.
+parameter mideleg = 12'h303;//0x303 MRW mideleg Machine interrupt delegation register.
+parameter mie = 12'h304;//0x304 MRW mie Machine interrupt-enable register.
+parameter mtvec = 12'h305;//0x305 MRW mtvec Machine trap-handler base address.
+parameter mcounteren = 12'h306;//0x306 MRW mcounteren Machine counter enable.
+//Machine Trap Handling
+parameter mscratch = 12'h340;//0x340 MRW mscratch Scratch register for machine trap handlers.
+parameter mepc = 12'h341;//0x341 MRW mepc Machine exception program counter.
+parameter mcause = 12'h342;//0x342 MRW mcause Machine trap cause.
+parameter mtval = 12'h343;//0x343 MRW mtval Machine bad address or instruction.
+parameter mip = 12'h344;//0x344 MRW mip Machine interrupt pending.
+//Machine Memory Protection
+//0x3A0 MRW pmpcfg0 Physical memory protection configuration.
+//0x3A1 MRW pmpcfg1 Physical memory protection configuration, RV32 only.
+//0x3A2 MRW pmpcfg2 Physical memory protection configuration.
+//0x3A3 MRW pmpcfg3 Physical memory protection configuration, RV32 only.
+//0x3B0 MRW pmpaddr0 Physical memory protection address register.
+//0x3B1 MRW pmpaddr1 Physical memory protection address register.
+//.
+//.
+//.
+//0x3BF MRW pmpaddr15 Physical memory protection address register.
+//Table 2.4: Currently allocated RISC-V machine-level CSR addresses.
+//Volume II: RISC-V Privileged Architectures V20190608-Priv-MSU-Ratified 11
+//Number Privilege Name Description
+
+//Machine Counter/Timers
+parameter mcycle = 12'hB00;//0xB00 MRW mcycle Machine cycle counter.
+parameter minstret = 12'hB02;//0xB02 MRW minstret Machine instructions-retired counter.
+//0xB03 MRW mhpmcounter3 Machine performance-monitoring counter.
+//0xB04 MRW mhpmcounter4 Machine performance-monitoring counter.
+//.
+//.
+//.
+//0xB1F MRW mhpmcounter31 Machine performance-monitoring counter.
+parameter mcycleh = 12'hB80;//0xB80 MRW mcycleh Upper 32 bits of mcycle, RV32I only.
+parameter minstreth = 12'hB82;//0xB82 MRW minstreth Upper 32 bits of minstret, RV32I only.
+//0xB83 MRW mhpmcounter3h Upper 32 bits of mhpmcounter3, RV32I only.
+//0xB84 MRW mhpmcounter4h Upper 32 bits of mhpmcounter4, RV32I only.
+//.
+//.
+//.
+//0xB9F MRW mhpmcounter31h Upper 32 bits of mhpmcounter31, RV32I only.
+//Machine Counter Setup
+parameter mcountinhibit = 12'h320;//0x320 MRW mcountinhibit Machine counter-inhibit register.
+//0x323 MRW mhpmevent3 Machine performance-monitoring event selector.
+//0x324 MRW mhpmevent4 Machine performance-monitoring event selector.
+//.
+//.
+//.
+//0x33F MRW mhpmevent31 Machine performance-monitoring event selector.
+//Debug/Trace Registers (shared with Debug Mode)
+//0x7A0 MRW tselect Debug/Trace trigger register select.
+//0x7A1 MRW tdata1 First Debug/Trace trigger data register.
+//0x7A2 MRW tdata2 Second Debug/Trace trigger data register.
+//0x7A3 MRW tdata3 Third Debug/Trace trigger data register.
+//Debug Mode Registers
+//0x7B0 DRW dcsr Debug control and status register.
+//0x7B1 DRW dpc Debug PC.
+//0x7B2 DRW dscratch0 Debug scratch register 0.
+//0x7B3 DRW dscratch1 Debug scratch register 1.
+
 typedef enum logic [3:0] { FETCH, WAIT_FETCH, EXECUTE, INC } states_t;
 states_t state = FETCH;
 
-wire [3:0] funct3;
+wire [2:0] funct3;
 wire [6:0] funct7;
 
 assign funct3 = IR [14:12];
@@ -126,11 +204,13 @@ jalr_states_t jalr_states = SAVE_PC;
 
 wire [31:0] u_imm = {IR [31:12], 12'b000000000000};
 logic [12:0] b_imm;
+logic [11:0] i_imm;
 assign b_imm [0:0] = 1'b0;
 assign b_imm [11:11] = IR [7:7];
 assign b_imm [4:1] = IR [11:8];
 assign b_imm [10:5] = IR [30:25];
 assign b_imm [12:12] = IR [31:31];
+assign i_imm = IR [31:20];
 
 always @(negedge clk) begin
     if(rst)
@@ -235,7 +315,7 @@ always @(negedge clk) begin
                     regfile_src = ALU_INPUT;
                     sr2_src = I_IMM_SRC;
                     sr1_src = REG_SRC2;
-                    op = {funct7[5:5], funct3};
+                    op = {((funct3 == 3'b001) | (funct3 == 3'b101))? funct7[5:5] : 1'b0, funct3};
                     //
                     start = 1'b1;
                     if(alu_done)
@@ -358,7 +438,28 @@ always @(negedge clk) begin
                         end
                     endcase
                 end
-                default: state = INC;
+                SYSTEM:
+                begin
+                    case(i_imm)
+                        EBREAK:
+                        begin
+                            $display("EBREAK EXECUTED");
+                            $display("--------------REG DUMP--------------");
+                            //Display all registers
+                            for(int i = 0;i < 8;i++)
+                            begin
+                                $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
+                            end
+                            $display("pc: %02d: 0x%08x", PC);                            
+                            $stop;
+                        end
+                    endcase
+                end
+                default:
+                begin
+                    //Trigger Illegal Instruction exeption
+                    state = INC;
+                end
             endcase
         end
         INC: //Increment Program counter
@@ -368,6 +469,13 @@ always @(negedge clk) begin
             if(count > 31)
             begin
                 state = FETCH;
+                            //$display("--------------REG DUMP--------------");
+                            //Display all registers
+                            //for(int i = 0;i < 8;i++)
+                            //begin
+                            //    $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
+                            //end
+                            //$display("pc: 0x%08x", PC);                            
             end
             else
             begin
