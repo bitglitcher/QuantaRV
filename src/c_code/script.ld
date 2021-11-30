@@ -10,7 +10,7 @@ OUTPUT_ARCH(riscv)
 MEMORY
 {
    /* qemu-system-risc64 virt machine */
-   RAM (rwx)  : ORIGIN = 0x000000, LENGTH = 4K
+   RAM (rwx)  : ORIGIN = 0x000000, LENGTH = 0xfff
 }
 /* >>> End of our addition. <<< */
 ENTRY(_start)
@@ -18,7 +18,7 @@ SEARCH_DIR("/mnt/c/Users/camin/Documents/opt/riscv/riscv64-unknown-elf/lib");
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = SEGMENT_START("text-segment", 4K)); . = SEGMENT_START("text-segment", 4K) + SIZEOF_HEADERS;
+  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0xfff)); . = SEGMENT_START("text-segment", 0xfff) + SIZEOF_HEADERS;
   /* >>> Our addition. <<< */
   PROVIDE(__stack_top = ORIGIN(RAM) + LENGTH(RAM));
   /* >>> End of our addition. <<< */

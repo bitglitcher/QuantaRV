@@ -1,150 +1,91 @@
 .section .init, "ax"
 .global _start
-_start:
-#    addi x2,  x2, 0xab
-#    addi x1,  x1, 0xab
-#    addi x3,  x3, 0xab
-#    addi x4,  x4, 0xab
-#    addi x5,  x5, 0xab
-#    addi x6,  x6, 0xab
-#    addi x7,  x7, 0xab
-#    addi x8,  x8, 0xab
-#    addi x9,  x9, 0xab
-#    addi x10, x10, 0xab
-#    addi x11, x11, 0xab
-#    addi x12, x12, 0xab
-#    addi x13, x13, 0xab
-#    addi x14, x14, 0xab
-#    addi x15, x15, 0xab
-#    addi x16, x16, 0xab
-#    addi x17, x17, 0xab
-#    addi x18, x18, 0xab
-#    addi x19, x19, 0xab
-#    addi x20, x20, 0xab
-#    addi x21, x21, 0xab
-#    addi x22, x22, 0xab
-#    addi x23, x23, 0xab
-#    addi x24, x24, 0xab
-#    addi x25, x25, 0xab
-#    addi x26, x26, 0xab
-#    addi x27, x27, 0xab
-#    addi x28, x28, 0xab
-#    addi x29, x29, 0xab
-#    addi x30, x30, 0xab
-#    addi x31, x31, 0xab
-#    add  x1, x1,  x1
-#    add  x2, x2,  x2
-#    add  x3, x3,  x3
-#    add  x4, x4,  x4
-#    add  x5, x5,  x5
-#    add  x6, x6,  x6
-#    add  x7, x7,  x7
-#    add  x9, x9,  x9
-#    add  x8, x8,  x8
-#    add  x11, x11, x11
-#    add  x10, x10, x10
-#    add  x13, x13, x13
-#    add  x12, x12, x12
-#    add  x15, x15, x15
-#    add  x14, x14, x14
-#    add  x17, x17, x17
-#    add  x16, x16, x16
-#    add  x19, x19, x19
-#    add  x18, x18, x18
-#    add  x21, x21, x21
-#    add  x20, x20, x20
-#    add  x23, x23, x23
-#    add  x22, x22, x22
-#    add  x25, x25, x25
-#    add  x24, x24, x24
-#    add  x27, x27, x27
-#    add  x26, x26, x26
-#    add  x29, x29, x29
-#    add  x28, x28, x28
-#    add  x31, x31, x31
-#    add  x30, x30, x30
-#    lui  x2,  0xcae
-#    lui  x1,  0xcae
-#    lui  x4,  0xcae
-#    lui  x3,  0xcae
-#    lui  x6,  0xcae
-#    lui  x5,  0xcae
-#    lui  x8,  0xcae
-#    lui  x7,  0xcae
-#    lui  x10, 0xcae
-#    lui  x9,  0xcae
-#    lui  x12, 0xcae
-#    lui  x11, 0xcae
-#    lui  x14, 0xcae
-#    lui  x13, 0xcae
-#    lui  x16, 0xcae
-#    lui  x15, 0xcae
-#    lui  x18, 0xcae
-#    lui  x17, 0xcae
-#    lui  x20, 0xcae
-#    lui  x19, 0xcae
-#    lui  x22, 0xcae
-#    lui  x21, 0xcae
-#    lui  x24, 0xcae
-#    lui  x23, 0xcae
-#    lui  x26, 0xcae
-#    lui  x25, 0xcae
-#    lui  x28, 0xcae
-#    lui  x27, 0xcae
-#    lui  x30, 0xcae
-#    lui  x29, 0xcae
-#    auipc  x1,  0xcae
-#    lui  x31, 0xcae
-#    auipc  x3,  0xcae
-#    auipc  x2,  0xcae
-#    auipc  x5,  0xcae
-#    auipc  x4,  0xcae
-#    auipc  x7,  0xcae
-#    auipc  x6,  0xcae
-#    auipc  x9,  0xcae
-#    auipc  x8,  0xcae
-#    auipc  x11, 0xcae
-#    auipc  x10, 0xcae
-#    auipc  x13, 0xcae
-#    auipc  x12, 0xcae
-#    auipc  x15, 0xcae
-#    auipc  x14, 0xcae
-#    auipc  x17, 0xcae
-#    auipc  x16, 0xcae
-#    auipc  x19, 0xcae
-#    auipc  x18, 0xcae
-#    auipc  x21, 0xcae
-#    auipc  x20, 0xcae
-#    auipc  x23, 0xcae
-#    auipc  x22, 0xcae
-#    auipc  x25, 0xcae
-#    auipc  x24, 0xcae
-#    auipc  x27, 0xcae
-#    auipc  x26, 0xcae
-#    auipc  x29, 0xcae
-#    auipc  x28, 0xcae
-#
-#    auipc  x30, 0xcae
-#    auipc  x31, 0xcae
-#
-#    init_fibonnaci:
-#
-#    mv x1, zero;
-#
-#    mv x2, zero; 
-#    addi x2, x2, 1;
-#
-#    fibonnaci_loop:
-#
-#    add x3, x2, x1
-#
-#    mv x2, x1
-#
-#    mv x1, x3
-#
-#    lui x10, %hi(fibonnaci_loop)
-#    addi x10, x10, %lo(fibonnaci_loop)    jalr zero, 0(x10)
+.global _trap_handler
 
+.equ REGBYTES, 4
+
+.equ timecmp, 0x10000088
+.equ timecmp_h, 0x1000008c
+.equ time, 0x10000080
+.equ time_h, 0x10000084
+
+.macro push_context
+    #reserve enough space to push registers into the stack
+    addi sp, sp, -32*REGBYTES
+
+    #Push all registers
+    sw x1, 1*REGBYTES(sp)
+    sw x2, 2*REGBYTES(sp)
+    sw x3, 3*REGBYTES(sp)
+    sw x4, 4*REGBYTES(sp)
+    sw x5, 5*REGBYTES(sp)
+    sw x6, 6*REGBYTES(sp)
+    sw x7, 7*REGBYTES(sp)
+    sw x8, 8*REGBYTES(sp)
+    sw x9, 9*REGBYTES(sp)
+    sw x10, 10*REGBYTES(sp)
+    sw x11, 11*REGBYTES(sp)
+    sw x12, 12*REGBYTES(sp)
+    sw x13, 13*REGBYTES(sp)
+    sw x14, 14*REGBYTES(sp)
+    sw x15, 15*REGBYTES(sp)
+    sw x16, 16*REGBYTES(sp)
+    sw x17, 17*REGBYTES(sp)
+    sw x18, 18*REGBYTES(sp)
+    sw x19, 19*REGBYTES(sp)
+    sw x20, 20*REGBYTES(sp)
+    sw x21, 21*REGBYTES(sp)
+    sw x22, 22*REGBYTES(sp)
+    sw x23, 23*REGBYTES(sp)
+    sw x24, 24*REGBYTES(sp)
+    sw x25, 25*REGBYTES(sp)
+    sw x26, 26*REGBYTES(sp)
+    sw x27, 27*REGBYTES(sp)
+    sw x28, 28*REGBYTES(sp)
+    sw x29, 29*REGBYTES(sp)
+    sw x30, 30*REGBYTES(sp)
+    sw x31, 31*REGBYTES(sp)
+.endm
+
+.macro pop_context
+    #Pop all registers
+    lw x1, 1*REGBYTES(sp)
+    lw x2, 2*REGBYTES(sp)
+    lw x3, 3*REGBYTES(sp)
+    lw x4, 4*REGBYTES(sp)
+    lw x5, 5*REGBYTES(sp)
+    lw x6, 6*REGBYTES(sp)
+    lw x7, 7*REGBYTES(sp)
+    lw x8, 8*REGBYTES(sp)
+    lw x9, 9*REGBYTES(sp)
+    lw x10, 10*REGBYTES(sp)
+    lw x11, 11*REGBYTES(sp)
+    lw x12, 12*REGBYTES(sp)
+    lw x13, 13*REGBYTES(sp)
+    lw x14, 14*REGBYTES(sp)
+    lw x15, 15*REGBYTES(sp)
+    lw x16, 16*REGBYTES(sp)
+    lw x17, 17*REGBYTES(sp)
+    lw x18, 18*REGBYTES(sp)
+    lw x19, 19*REGBYTES(sp)
+    lw x20, 20*REGBYTES(sp)
+    lw x21, 21*REGBYTES(sp)
+    lw x22, 22*REGBYTES(sp)
+    lw x23, 23*REGBYTES(sp)
+    lw x24, 24*REGBYTES(sp)
+    lw x25, 25*REGBYTES(sp)
+    lw x26, 26*REGBYTES(sp)
+    lw x27, 27*REGBYTES(sp)
+    lw x28, 28*REGBYTES(sp)
+    lw x29, 29*REGBYTES(sp)
+    lw x30, 30*REGBYTES(sp)
+    lw x31, 31*REGBYTES(sp)
+    
+    #return stack pointer to where it was
+    addi sp, sp, 32*REGBYTES
+.endm
+
+_start:
     .cfi_startproc
     .cfi_undefined ra
     .option push
@@ -153,7 +94,104 @@ _start:
     .option pop
     la sp, __stack_top
     add s0, sp, zero
+
+    la t3, _vector_table
+    addi t3, t3, 0b01 #Set vectored mode
+    csrw mtvec, t3
+    
+    #enable global machine interrupts
+    #li t0, 0b1000
+    #csrs mstatus, t0 
+
+    #load current time
+    #la t0, time
+    #lw t1, 0(t0)
+    #lw t2, 4(t0)
+    #offset loaded time by 0x1fff
+    #li t3, 0x1fff #load offset
+    #add t4, t1, t3 #Offset value
+    
+    #detect overflow
+    #bltu t4, t2, .overflow
+    #Otherwise just set_timecmp
+    #j .set_timecmp 
+    
+    #.overflow:
+    #add overflow to higher bits
+    #add t2, t2, t4
+
+#    .set_timecmp:
+    #set timecmp
+#    la t0, timecmp
+#    sw t1, 0(t0)
+#    sw t2, 4(t0)
+
+    #enable machine timer interrupt
+#    li t0, 0b10000000
+#    csrs mie, t0
+
     jal ra, main
+
     ebreak
     .cfi_endproc
-    .end
+
+
+
+
+.align 2
+_vector_table:
+    # Trap handler
+    j _trap_handler
+    #_u_mode_soft_handler
+    #mret
+    #_s_mode_soft_handler
+    mret
+    #_m_mode_soft_handler
+    mret
+    #_u_mode_timer_handler
+    mret
+    #_s_mode_timer_handler
+    mret
+    mret
+    mret
+    #_m_mode_timer_handler
+    j _m_mode_timer_handler
+    #_u_mode_external_handler
+    mret
+    #_s_mode_external_handler
+    mret
+    #_m_mode_external_handler
+    mret
+#timer hadler
+
+_m_mode_timer_handler:
+    push_context
+    #---- call C Code Handler ----
+    call timer_interrupt_handler
+    #---- end of C Code Handler ----
+    pop_context
+    #return from trap handler
+    mret
+
+#Trap handler
+.align 2
+_trap_handler:
+    push_context
+    #---- call C Code Handler ----
+    #Read CSR for function arguments
+    csrr a0, mepc
+    csrr a1, mcause
+    csrr a2, mtval
+    call trap_handler
+    #---- end of C Code Handler ----
+    pop_context    
+    #return from trap handler
+    #Increment PC + 4
+    addi sp, sp, -1*REGBYTES
+    sw t0, 1*REGBYTES(sp)
+    csrr t0, mepc
+    addi t0, t0, 4
+    csrw mepc, t0
+    lw t0, 1*REGBYTES(sp)
+    addi sp, sp, 1*REGBYTES
+    mret
