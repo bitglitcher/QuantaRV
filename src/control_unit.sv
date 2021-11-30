@@ -51,7 +51,8 @@ module control_unit
     input logic [31:0] rs1_d,    //This data bus comes from the register file to write data to the CSRs
 
     //Timer interrupt input
-    input timer_interrupt
+    input timer_interrupt,
+    input external_interrupt
 );
 
 //Instruction Opcodes
@@ -411,14 +412,66 @@ logic [31:0] mscratch_reg; // 12'h340;//0x340 MRW mscratch Scratch register for 
 logic [31:0] mepc_reg; // 12'h341;//0x341 MRW mepc Machine exception program counter.
 logic [31:0] mcause_reg; // 12'h342;//0x342 MRW mcause Machine trap cause.
 logic [31:0] mtval_reg; // 12'h343;//0x343 MRW mtval Machine bad address or instruction.
-logic [31:0] mip_reg; // 12'h344;//0x344 MRW mip Machine interrupt pending.
+logic [31:0] mip_reg_ro; // 12'h344;//0x344 MRW mip Machine interrupt pending.
+
+always @(posedge clk) begin
+    mip_mtip = timer_interrupt;
+    mip_meip = external_interrupt;
+end
+
+//Machine Interrupt Pending Bits
+logic mip_meip = 1'b0;
+logic mip_seip = 1'b0;
+logic mip_ueip = 1'b0;
+logic mip_mtip = 1'b0;
+logic mip_stip = 1'b0;
+logic mip_utip = 1'b0;
+logic mip_msip = 1'b0;
+logic mip_ssip = 1'b0;
+logic mip_usip = 1'b0;
+
+assign mip_reg_ro [31:12] = 0;
+assign mip_reg_ro [11:11] = mip_meip;
+assign mip_reg_ro [10:10] = 1'b0;
+assign mip_reg_ro [9:9] = mip_seip;
+assign mip_reg_ro [8:8] = mip_ueip;
+assign mip_reg_ro [7:7] = mip_mtip;
+assign mip_reg_ro [6:6] = 1'b0;
+assign mip_reg_ro [5:5] = mip_stip;
+assign mip_reg_ro [4:4] = mip_utip;
+assign mip_reg_ro [3:3] = mip_msip;
+assign mip_reg_ro [2:2] = 1'b0;
+assign mip_reg_ro [1:1] = mip_ssip;
+assign mip_reg_ro [0:0] = mip_usip;
+//Machine Interrupt Enable Bits
+
+wire mie_meie;
+wire mie_seie;
+wire mie_ueie;
+wire mie_mtie;
+wire mie_stie;
+wire mie_utie;
+wire mie_msie;
+wire mie_ssie;
+wire mie_usie;
+
+assign mie_meie = mie_reg [11:11];
+assign mie_seie = mie_reg [9:9];
+assign mie_ueie = mie_reg [8:8];
+assign mie_mtie = mie_reg [7:7];
+assign mie_stie = mie_reg [5:5];
+assign mie_utie = mie_reg [4:4];
+assign mie_msie = mie_reg [3:3];
+assign mie_ssie = mie_reg [1:1];
+assign mie_usie = mie_reg [0:0];
+
+
 
 initial begin
     mscratch_reg = 0;
     mepc_reg = 0;
     mcause_reg = 0;
     mtval_reg = 0;
-    mip_reg = 0;
 end
 
 //Mcause Codes
@@ -510,6 +563,8 @@ begin
         mstatus_mie = 0;
         //Reset MPRIV
         mstatus_mprv = 0;
+        //Reset current mode
+        current_mode = M_MODE;
     end
     else
     begin
@@ -528,29 +583,29 @@ begin
                 end
                 MRET:
                 begin
-                    mstatus_mpp = M_MODE; //Is set to M_MODE because the other modes are not supported;
-                    mstatus_mie = mstatus_mpie;
-                    mstatus_mpie = 1'b1;
-                    current_mode = mstatus_mpp;
+                    mstatus_mpp <= M_MODE; //Is set to M_MODE because the other modes are not supported;
+                    mstatus_mie <= mstatus_mpie;
+                    mstatus_mpie <= 1'b1;
+                    current_mode <= mstatus_mpp;
                 end
             endcase
             //Set xIE to xMIE
         end else if(trap_sig)
         begin
             //Save epc
-            mepc_reg = PC;
+            mepc_reg <= PC;
             //Set cause
-            mcause_reg = internal_cause; //The failing instruction logic sets this register
+            mcause_reg <= internal_cause; //The failing instruction logic sets this register
             //Set Machine Mode
-            current_mode = M_MODE; //Traps are always taken in M Machine mode
+            current_mode <= M_MODE; //Traps are always taken in M Machine mode
             //Set mtval
-            mtval_reg = internal_mtval;
+            mtval_reg <= internal_mtval;
             //Set previous machine mode on mstatus
-            mstatus_mpp = current_mode;
+            mstatus_mpp <= current_mode;
             //Disable Machine Global Interrupts. This by default disables all the interrupts of the system.
-            mstatus_mie = 1'b0;
+            mstatus_mie <= 1'b0;
             //Save Old Machine Global Interrupt Enable bit
-            mstatus_mpie = mstatus_mie;
+            mstatus_mpie <= mstatus_mie;
             //Jump to the trap vector
         end
         else
@@ -644,7 +699,7 @@ begin
                     mepc: read_data = mepc_reg;
                     mcause: read_data = mcause_reg;
                     mtval: read_data = mtval_reg;
-                    mip: read_data = mip_reg;
+                    mip: read_data = mip_reg_ro;
                 endcase
                 if(csr_write)
                 begin
@@ -653,7 +708,15 @@ begin
                         mepc: mepc_reg = write_data;
                         mcause: mcause_reg = write_data;
                         mtval: mtval_reg = write_data;
-                        mip: mip_reg = write_data;
+                        mip: 
+                        begin
+                            mip_seip = write_data [9:9];
+                            mip_ueip = write_data [8:8];
+                            mip_stip = write_data [5:5];
+                            mip_utip = write_data [4:4];
+                            mip_ssip = write_data [1:1];
+                            mip_usip = write_data [0:0];
+                        end
                     endcase
                 end
             end
@@ -693,7 +756,7 @@ reg [1:0] current_mode;
 
 
 
-typedef enum logic [3:0] { FETCH, WAIT_FETCH, EXECUTE, INC, TRAP} states_t;
+typedef enum logic [3:0] { FETCH, WAIT_FETCH, EXECUTE, INC, TRAP, ATRAP} states_t;
 states_t state = FETCH;
 
 wire [2:0] funct3;
@@ -801,616 +864,721 @@ always @(negedge clk) begin
         mauc_state = SET_OPERATION;
         trap_sig = 1'b0;
         //Setup Privilege Register Mode to Machine mode
-        current_mode = M_MODE;
+        //current_mode <= M_MODE;
         trap_sig = 1'b0;
         priv_return = 1'b0;
     end
-    case(state)
-        FETCH:
-        begin
-            memory_operation = FETCH_DATA;
-            funct3_cu <= LW;
-            bu_start = 1'b0;
-            cyc = 1'b1;
-            wr = 0;
-            trap_sig = 1'b0;
-            trap_state = WRITE_CSR;
-            priv_return = 1'b0;
-            if(ack)
+    else
+    begin        
+        case(state)
+            //Takes all asynchronomous traps before executing another instruction
+            ATRAP:
             begin
-                state = WAIT_FETCH;
-            end 
-        end
-        WAIT_FETCH:
-        begin
-            funct3_cu <= LW;
-            cyc = 1'b0;
-            if(data_valid)
-            begin
-                IR = fetched_data;
-                state = EXECUTE;
-                jalr_states = CALC_NPC;
-                mauc_state = SET_OPERATION;
-            end
-            else if(err)
-            begin
-                //Do an illegal address something thing
-            end
-        end
-        EXECUTE:
-        begin
-            count = 0;
-            carry = 0;
-            funct3_cu <= funct3;
-            //Decode instructions
-            case(IR[6:0])
-                LOAD:
-                begin
-                    //Set register file input multiplexer to load bus source
-                    regfile_src = LOAD_SRC;
-                    memory_operation = LOAD_DATA;
-                    case(mauc_state)
-                        SET_OPERATION:
-                        begin
-                            cyc = 1'b1;
-                            if(ack)
-                            begin
-                                mauc_state = WAIT;
-                            end 
-                        end
-                        WAIT:
-                        begin
-                            cyc = 1'b0;
-                            if(data_valid)
-                            begin
-                                wr = 1'b1;
-                                state = INC;
-                            end
-                        end
-                    endcase
-                end
-                STORE:
-                begin
-                    memory_operation = STORE_DATA;
-                    case(mauc_state)
-                        SET_OPERATION:
-                        begin
-                            cyc = 1'b1;
-                            if(ack)
-                            begin
-                                mauc_state = WAIT;
-                            end
-                        end
-                        WAIT:
-                        begin
-                            cyc = 1'b0;
-                            if(done)
-                            begin
-                                state = INC;
-                            end
-                        end
-                    endcase
-                    
-                end
-                OP_IMM:
-                begin
-                    //Set register file input multiplexer to alu output bus
-                    //$display("Executing OP_IMM");
-                    regfile_src = ALU_INPUT;
-                    sr2_src = I_IMM_SRC;
-                    sr1_src = REG_SRC2;
-                    op = {((funct3 == 3'b001) | (funct3 == 3'b101))? funct7[5:5] : 1'b0, funct3};
-                    //
-                    start = 1'b1;
-                    if(alu_done)
+                // $display("TRAP EXECUTED");
+                // $display("\t\tPC %08x", PC);                            
+                // $display("\t\tCAUSE %08x", internal_cause);                            
+                // $display("\t\tmtval %08x", internal_mtval);                            
+                // $display("*IGNORED*");
+                wr = 1'b0;
+                csr_write = 1'b0;
+                trap_sig = 1'b1;
+                unique case(trap_state)
+                    WRITE_CSR:
                     begin
-                        start = 1'b0;
-                        state = INC;
-                        wr = 1'b1; //Write to register file
+                        trap_sig = 1'b1;     
+                        trap_state = SET_PC;       
                     end
-                    
-                end
-                OP:
-                begin
-                    //Set register file input multiplexer to alu output bus
-                    //$display("Executing OP");
-                    regfile_src = ALU_INPUT;
-                    sr2_src = REG_SRC;
-                    sr1_src = REG_SRC2;
-                    op = {funct7[5:5], funct3};
-                    //
-                    start = 1'b1;
-                    if(alu_done)
+                    SET_PC:
                     begin
-                        start = 1'b0;
-                        state = INC;
-                        wr = 1'b1; //Write to register file
-                    end
-                end
-                BRANCH:
-                begin
-                    bu_start = 1'b1;
-                    if(bu_done)
-                    begin
-                        bu_start = 1'b0;
-                        if(jump)
+                        trap_sig = 1'b0;            
+                        //Depending on the mode that executes it
+                        if(mtvec_reg [1:0] == TRAP_DIRECT)
                         begin
-                            state = FETCH;
-                            //Set PC to target address
-                            PC = PC + 32'($signed(b_imm));
+                            PC = {mtvec_reg [31:2], 2'b0};
+                            //$display("PC set to 0x%08x", {mtvec_reg [31:2], 2'b0});         
+                        end
+                        else if(mtvec_reg [1:0] == TRAP_VECTORED & internal_cause[31:31]) //Only do vectored on Asynchronous traps
+                        begin
+                            //$display("PC set to 0x%08x", {mtvec_reg [31:2], 2'b0} + {internal_cause [29:0], 2'b0});         
+                            PC = {mtvec_reg [31:2], 2'b0} + {internal_cause [29:0], 2'b0};
                         end
                         else
                         begin
-                            state = INC; //Continue normal cycle
+                            PC = {mtvec_reg [31:2], 2'b0};
+                        end
+                        state = FETCH;
+                    end
+                endcase
+            end
+            FETCH:
+            begin
+                //Take asynchrounous interrupts
+                //MEI, MSI, MTI, SEI, SSI, STI, UEI,USI, UTI.
+                //Interrupts can only be disabled for higher privileges, meaning that they can only be disabled for M_MODE when M_MODE
+                if(mip_meip & mie_meie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_EXT_INT;
+                    internal_mtval = 32'b0;
+                end else if(mip_msip & mie_msie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_SOFT_INT;
+                    internal_mtval = 32'b0;
+                end else if(mip_mtip & mie_mtie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_TIMER_INT;
+                    internal_mtval = 32'b0;
+                end
+                // end else if(mip_seip & mie_mtie)
+                // begin
+                    
+                // end
+                // end else if(mip_ssip & mie_msie)
+                // begin
+                    
+                // end
+                // end else if(mip_stip & mie_msie)
+                // begin
+                    
+                // end
+                // end else if(mip_ueip & mie_msie)
+                // begin
+                    
+                // end
+                // end else if(mip_usip & mie_msie)
+                // begin
+                    
+                // end
+                else //Fetch instruction if there were not interrupts
+                begin
+                    memory_operation = FETCH_DATA;
+                    funct3_cu <= LW;
+                    bu_start = 1'b0;
+                    cyc = 1'b1;
+                    wr = 0;
+                    trap_sig = 1'b0;
+                    trap_state = WRITE_CSR;
+                    priv_return = 1'b0;
+                    if(ack)
+                    begin
+                        state = WAIT_FETCH;
+                    end else if(err)
+                    begin
+                        
+                    end
+                end 
+            end
+            WAIT_FETCH:
+            begin
+                funct3_cu <= LW;
+                cyc = 1'b0;
+                if(data_valid)
+                begin
+                    IR = fetched_data;
+                    state = EXECUTE;
+                    jalr_states = CALC_NPC;
+                    mauc_state = SET_OPERATION;
+                end
+                else if(err)
+                begin
+                    //Do an illegal address something thing
+                end
+            end
+            EXECUTE:
+            begin
+                count = 0;
+                carry = 0;
+                funct3_cu <= funct3;
+                //Decode instructions
+                case(IR[6:0])
+                    LOAD:
+                    begin
+                        //Set register file input multiplexer to load bus source
+                        regfile_src = LOAD_SRC;
+                        memory_operation = LOAD_DATA;
+                        case(mauc_state)
+                            SET_OPERATION:
+                            begin
+                                cyc = 1'b1;
+                                if(ack)
+                                begin
+                                    mauc_state = WAIT;
+                                end
+                            end
+                            WAIT:
+                            begin
+                                cyc = 1'b0;
+                                if(data_valid)
+                                begin
+                                    wr = 1'b1;
+                                    state = INC;
+                                end
+                            end
+                        endcase
+                    end
+                    STORE:
+                    begin
+                        memory_operation = STORE_DATA;
+                        case(mauc_state)
+                            SET_OPERATION:
+                            begin
+                                cyc = 1'b1;
+                                if(ack)
+                                begin
+                                    mauc_state = WAIT;
+                                end
+                            end
+                            WAIT:
+                            begin
+                                cyc = 1'b0;
+                                if(done)
+                                begin
+                                    state = INC;
+                                end
+                            end
+                        endcase
+                        
+                    end
+                    OP_IMM:
+                    begin
+                        //Set register file input multiplexer to alu output bus
+                        //$display("Executing OP_IMM");
+                        regfile_src = ALU_INPUT;
+                        sr2_src = I_IMM_SRC;
+                        sr1_src = REG_SRC2;
+                        op = {((funct3 == 3'b001) | (funct3 == 3'b101))? funct7[5:5] : 1'b0, funct3};
+                        //
+                        start = 1'b1;
+                        if(alu_done)
+                        begin
+                            start = 1'b0;
+                            state = INC;
+                            wr = 1'b1; //Write to register file
                         end
                         
                     end
-                end
-                AUIPC:
-                begin                    
-                    //$display("Executing AUIPC");
-                    //Set register file input multiplexer to alu output bus
-                    op = ADD;
-                    regfile_src = ALU_INPUT;
-                    sr2_src = ALU_PC_SRC;
-                    sr1_src = ALU_U_IMM_SRC;
-                    //
-                    start = 1'b1;
-                    if(alu_done)
+                    OP:
                     begin
-                        start = 1'b0;
-                        state = INC;
-                        wr = 1'b1; //Write to register file
+                        //Set register file input multiplexer to alu output bus
+                        //$display("Executing OP");
+                        regfile_src = ALU_INPUT;
+                        sr2_src = REG_SRC;
+                        sr1_src = REG_SRC2;
+                        op = {funct7[5:5], funct3};
+                        //
+                        start = 1'b1;
+                        if(alu_done)
+                        begin
+                            start = 1'b0;
+                            state = INC;
+                            wr = 1'b1; //Write to register file
+                        end
                     end
-                end
-                LUI:
-                begin
-                    //$display("Executing LUI");
-                    regfile_src = U_IMM_SRC;
-                    wr = 1'b1; //Write to register file
-                    state = INC;
-                end
-                JAL, JALR:
-                begin
-                    //$display("Executing JAL");
-                    regfile_src = ALU_INPUT;
-                    case(jalr_states)
-                        CALC_NPC:
+                    BRANCH:
+                    begin
+                        bu_start = 1'b1;
+                        if(bu_done)
                         begin
-                            op = ADD;
-                            sr2_src = ALU_PC_SRC;
-                            sr1_src = ALU_4;
-                            wr = 1'b0; //Write to register file
-                            start = 1'b1;
-                            jalr_states = SAVE_PC;
-                        end
-                        SAVE_PC:
-                        begin
-                            start = 1'b0;
-                            if(alu_done)
+                            bu_start = 1'b0;
+                            if(jump)
                             begin
-                                wr = 1'b1; //Write to register file
-                                jalr_states = CALC_TARGET;
-                            end
-                        end
-                        CALC_TARGET:
-                        begin
-                            wr = 1'b0; //Write to register file
-                            if(IR[6:0] == JAL)
-                            begin
-                                sr2_src = ALU_PC_SRC;
-                                sr1_src = ALU_J_IMM;
-                            end
-                            else if(IR[6:0] == JALR)
-                            begin
-                                sr2_src = I_IMM_SRC;
-                                sr1_src = REG_SRC2;
-                            end
-                            start = 1'b1;
-                            jalr_states = JUMP_TARGET;
-                        end
-                        JUMP_TARGET:
-                        begin
-                            start = 1'b0;
-                            if(alu_done)
-                            begin
-                                //-----------------NOTE------------------
-                                //This can use instead the shift register capability to shift in all data and not waste space with multiplexors
-                                PC = alu_result;
                                 state = FETCH;
+                                //Set PC to target address
+                                PC = PC + 32'($signed(b_imm));
                             end
+                            else
+                            begin
+                                state = INC; //Continue normal cycle
+                            end
+                            
                         end
-                    endcase
-                end
-                SYSTEM:
-                begin
-                    case(funct3)
-                        PRIV:
+                    end
+                    AUIPC:
+                    begin                    
+                        //$display("Executing AUIPC");
+                        //Set register file input multiplexer to alu output bus
+                        op = ADD;
+                        regfile_src = ALU_INPUT;
+                        sr2_src = ALU_PC_SRC;
+                        sr1_src = ALU_U_IMM_SRC;
+                        //
+                        start = 1'b1;
+                        if(alu_done)
                         begin
-                            case(i_imm)
-                                EBREAK:
+                            start = 1'b0;
+                            state = INC;
+                            wr = 1'b1; //Write to register file
+                        end
+                    end
+                    LUI:
+                    begin
+                        //$display("Executing LUI");
+                        regfile_src = U_IMM_SRC;
+                        wr = 1'b1; //Write to register file
+                        state = INC;
+                    end
+                    JAL, JALR:
+                    begin
+                        //$display("Executing JAL");
+                        regfile_src = ALU_INPUT;
+                        case(jalr_states)
+                            CALC_NPC:
+                            begin
+                                op = ADD;
+                                sr2_src = ALU_PC_SRC;
+                                sr1_src = ALU_4;
+                                wr = 1'b0; //Write to register file
+                                start = 1'b1;
+                                jalr_states = SAVE_PC;
+                            end
+                            SAVE_PC:
+                            begin
+                                start = 1'b0;
+                                if(alu_done)
                                 begin
-                                    $display("EBREAK EXECUTED");
-                                    $display("--------------REG DUMP--------------");
-                                    //Display all registers
-                                    for(int i = 0;i < 8;i++)
-                                    begin
-                                        $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
-                                    end
-                                    $display("pc: %02d: 0x%08x", PC);                            
-                                    $stop;
+                                    wr = 1'b1; //Write to register file
+                                    jalr_states = CALC_TARGET;
                                 end
-                                URET:
+                            end
+                            CALC_TARGET:
+                            begin
+                                wr = 1'b0; //Write to register file
+                                if(IR[6:0] == JAL)
                                 begin
-                                    $display("ERROR: USER MODE NOT IMPLEMENTED");
-                                    $stop;
-                                    state = TRAP;
-                                    internal_cause <= MCAUSE_ILLEGAL_INS;
-                                    internal_mtval = IR; 
+                                    sr2_src = ALU_PC_SRC;
+                                    sr1_src = ALU_J_IMM;
                                 end
-                                SRET:
+                                else if(IR[6:0] == JALR)
                                 begin
-                                    $display("ERROR: SUPERVISOR MODE NOT IMPLEMENTED");
-                                    $stop;
-                                    state = TRAP;
-                                    internal_cause <= MCAUSE_ILLEGAL_INS;
-                                    internal_mtval = IR; 
+                                    sr2_src = I_IMM_SRC;
+                                    sr1_src = REG_SRC2;
                                 end
-                                MRET:
+                                start = 1'b1;
+                                jalr_states = JUMP_TARGET;
+                            end
+                            JUMP_TARGET:
+                            begin
+                                start = 1'b0;
+                                if(alu_done)
                                 begin
-                                    PC = mepc_reg;
-                                    priv_return = 1'b1;
+                                    //-----------------NOTE------------------
+                                    //This can use instead the shift register capability to shift in all data and not waste space with multiplexors
+                                    PC = alu_result;
                                     state = FETCH;
                                 end
-                            endcase
-                        end
-                        //Write on a read only CSR will create an illegal instruction exeption, registers that contain read only bits will be ignored
-                        //Zicsr extention
-                        CSRRW:
-                        begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                                $display("Illegal Access to 0x%08x CSR", i_imm);
-                                $stop;
-
                             end
-                            else
+                        endcase
+                    end
+                    SYSTEM:
+                    begin
+                        case(funct3)
+                            PRIV:
                             begin
-                                if(rd == 0) //Do not read but do write. Basically it's value will not be written anywhere.
-                                begin
-                                    if(csr_writable)
+                                case(i_imm)
+                                    EBREAK:
                                     begin
-                                        write_data <= rs1_d;
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                        $display("Illegal Write to 0x%08x CSR", i_imm);
+                                        $display("EBREAK EXECUTED");
+                                        $display("--------------REG DUMP--------------");
+                                        //Display all registers
+                                        for(int i = 0;i < 8;i++)
+                                        begin
+                                            $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
+                                        end
+                                        $display("pc: %02d: 0x%08x", PC);                            
                                         $stop;
                                     end
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
+                                    URET:
                                     begin
-                                        write_data <= rs1_d;
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                        $display("Illegal Write to 0x%08x CSR", i_imm);
+                                        $display("ERROR: USER MODE NOT IMPLEMENTED");
                                         $stop;
+                                        state = TRAP;
+                                        internal_cause <= MCAUSE_ILLEGAL_INS;
+                                        internal_mtval = IR; 
+                                    end
+                                    SRET:
+                                    begin
+                                        $display("ERROR: SUPERVISOR MODE NOT IMPLEMENTED");
+                                        $stop;
+                                        state = TRAP;
+                                        internal_cause <= MCAUSE_ILLEGAL_INS;
+                                        internal_mtval = IR; 
+                                    end
+                                    MRET:
+                                    begin
+                                        PC = mepc_reg;
+                                        priv_return = 1'b1;
+                                        state = FETCH;
+                                    end
+                                endcase
+                            end
+                            //Write on a read only CSR will create an illegal instruction exeption, registers that contain read only bits will be ignored
+                            //Zicsr extention
+                            CSRRW:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                    $display("Illegal Access to 0x%08x CSR", i_imm);
+                                    $stop;
+    
+                                end
+                                else
+                                begin
+                                    if(rd == 0) //Do not read but do write. Basically it's value will not be written anywhere.
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            write_data <= rs1_d;
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                            $display("Illegal Write to 0x%08x CSR", i_imm);
+                                            $stop;
+                                        end
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            write_data <= rs1_d;
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                            $display("Illegal Write to 0x%08x CSR", i_imm);
+                                            $stop;
+                                        end
                                     end
                                 end
                             end
-                        end
-                        CSRRS:
+                            CSRRS:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                end
+                                else
+                                begin
+                                    if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
+                                    begin
+                                        //In this state its only read. The contents of the CSR will be written to the Register file.
+                                        state = INC;
+                                        wr = 1'b1;
+                                        regfile_src = CSR_SRC;
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            //Change this
+                                            write_data <= (rs1_d | read_data); //Read and Set
+                                            
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                end
+                            end
+                            CSRRC:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                end
+                                else
+                                begin
+                                    if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
+                                    begin
+                                            state = INC;
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            //Change this
+                                            write_data <= read_data & ~(rs1_d); //This is for Read and Clear
+                                            
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                end
+                            end
+                            CSRRWI:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                end
+                                else
+                                begin
+                                    if(rd == 0) //Do not read but do write. Basically it's value will not be written anywhere.
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            write_data <= {26'b0,rs1};
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            write_data <= {26'b0,rs1};
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                end
+                            end
+                            CSRRSI:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                end
+                                else
+                                begin
+                                    if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
+                                    begin
+                                        //In this state its only read. The contents of the CSR will be written to the Register file.
+                                        state = INC;
+                                        wr = 1'b1;
+                                        regfile_src = CSR_SRC;
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            //Change this
+                                            write_data <= (rs1_d | {26'b0,rs1}); //Read and Set
+                                            
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                end
+                            end
+                            CSRRCI:
+                            begin
+                                //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
+                                if(csr_illegal_access)
+                                begin
+                                    //Make an illegal instruction exeption.
+                                    state = TRAP;
+                                    internal_cause <= MCAUSE_ILLEGAL_INS;
+                                    internal_mtval = IR; 
+                                end
+                                else
+                                begin
+                                    if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
+                                    begin
+                                            state = INC;
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                    end
+                                    else //Do read and write
+                                    begin
+                                        if(csr_writable)
+                                        begin
+                                            //Change this
+                                            write_data <= read_data & ~({26'b0,rs1}); //This is for Read and Clear
+                                            
+                                            csr_write = 1'b1;
+                                            state = INC;
+                                            //Activate Register file to write
+                                            wr = 1'b1;
+                                            regfile_src = CSR_SRC;
+                                        end
+                                        else
+                                        begin
+                                            //Else Create an illegal instruction exeption because the register is not writable
+                                            state = TRAP;
+                                            internal_cause <= MCAUSE_ILLEGAL_INS;
+                                            internal_mtval = IR; 
+                                        end
+                                    end
+                                end
+                            end
+                        endcase
+                    end
+                    default:
+                    begin
+                        //Trigger Illegal Instruction exeption
+                        state = TRAP;
+                        internal_cause <= MCAUSE_ILLEGAL_INS;
+                        internal_mtval = IR; 
+                    end
+                endcase
+            end
+            INC: //Increment Program counter
+            begin
+                //Disable write to register file signal, so we dont write other values that we dont want to write.
+                wr = 1'b0;
+                csr_write = 1'b0;
+                if(count > 31)
+                begin
+                    state = FETCH;
+                                //$display("--------------REG DUMP--------------");
+                                //Display all registers
+                                //for(int i = 0;i < 8;i++)
+                                //begin
+                                //    $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
+                                //end
+                                //$display("pc: 0x%08x", PC);                            
+                end
+                else
+                begin
+                    count = count + 1;
+                    carry = cout;
+                    PC[31:0] = {add, PC[31:1]}; //It should end up in the same position
+                end
+            end
+            //This is the state that handles illegal instruction exeptions
+            TRAP:
+            begin
+                //Take asynchrounous interrupts instead if any
+                //MEI, MSI, MTI, SEI, SSI, STI, UEI,USI, UTI.
+                //Interrupts can only be disabled for higher privileges, meaning that they can only be disabled for M_MODE when M_MODE
+                if(mip_meip & mie_meie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_EXT_INT;
+                    internal_mtval = 32'b0;
+                end else if(mip_msip & mie_msie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_SOFT_INT;
+                    internal_mtval = 32'b0;
+                end else if(mip_mtip & mie_mtie & ((mstatus_mie | (current_mode < M_MODE))))
+                begin
+                    state = ATRAP;
+                    internal_cause = MCAUSE_M_TIMER_INT;
+                    internal_mtval = 32'b0;
+                end
+                else
+                begin
+                    // $display("TRAP EXECUTED");
+                    // $display("\t\tPC %08x", PC);                            
+                // $display("\t\tPC %08x", PC);                            
+                    // $display("\t\tPC %08x", PC);                            
+                    // $display("\t\tCAUSE %08x", internal_cause);                            
+                // $display("\t\tCAUSE %08x", internal_cause);                            
+                    // $display("\t\tCAUSE %08x", internal_cause);                            
+                    // $display("\t\tmtval %08x", internal_mtval);                            
+                    // $display("*IGNORED*");
+                    wr = 1'b0;
+                    csr_write = 1'b0;
+                    trap_sig = 1'b1;
+                    unique case(trap_state)
+                        WRITE_CSR:
                         begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                            end
-                            else
-                            begin
-                                if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
-                                begin
-                                    //In this state its only read. The contents of the CSR will be written to the Register file.
-                                    state = INC;
-                                    wr = 1'b1;
-                                    regfile_src = CSR_SRC;
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        //Change this
-                                        write_data <= (rs1_d | read_data); //Read and Set
-                                        
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                            end
+                            trap_sig = 1'b1;     
+                        trap_sig = 1'b1;     
+                            trap_sig = 1'b1;     
+                            trap_state = SET_PC;       
+                        trap_state = SET_PC;       
+                            trap_state = SET_PC;       
                         end
-                        CSRRC:
+                        SET_PC:
                         begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                            end
-                            else
-                            begin
-                                if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
-                                begin
-                                        state = INC;
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        //Change this
-                                        write_data <= read_data & ~(rs1_d); //This is for Read and Clear
-                                        
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                            end
-                        end
-                        CSRRWI:
-                        begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                            end
-                            else
-                            begin
-                                if(rd == 0) //Do not read but do write. Basically it's value will not be written anywhere.
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        write_data <= {26'b0,rs1};
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        write_data <= {26'b0,rs1};
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                            end
-                        end
-                        CSRRSI:
-                        begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                            end
-                            else
-                            begin
-                                if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
-                                begin
-                                    //In this state its only read. The contents of the CSR will be written to the Register file.
-                                    state = INC;
-                                    wr = 1'b1;
-                                    regfile_src = CSR_SRC;
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        //Change this
-                                        write_data <= (rs1_d | {26'b0,rs1}); //Read and Set
-                                        
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                            end
-                        end
-                        CSRRCI:
-                        begin
-                            //No matter if its read or write. Illegal Access will yield and illegal instruction exeption.
-                            if(csr_illegal_access)
-                            begin
-                                //Make an illegal instruction exeption.
-                                state = TRAP;
-                                internal_cause <= MCAUSE_ILLEGAL_INS;
-                                internal_mtval = IR; 
-                            end
-                            else
-                            begin
-                                if(rs1 == 0) //Do not write or make exeption for writting. Only read in this case.
-                                begin
-                                        state = INC;
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                end
-                                else //Do read and write
-                                begin
-                                    if(csr_writable)
-                                    begin
-                                        //Change this
-                                        write_data <= read_data & ~({26'b0,rs1}); //This is for Read and Clear
-                                        
-                                        csr_write = 1'b1;
-                                        state = INC;
-                                        //Activate Register file to write
-                                        wr = 1'b1;
-                                        regfile_src = CSR_SRC;
-                                    end
-                                    else
-                                    begin
-                                        //Else Create an illegal instruction exeption because the register is not writable
-                                        state = TRAP;
-                                        internal_cause <= MCAUSE_ILLEGAL_INS;
-                                        internal_mtval = IR; 
-                                    end
-                                end
-                            end
+                            trap_sig = 1'b0;            
+                        trap_sig = 1'b0;            
+                            trap_sig = 1'b0;            
+                            PC = {mtvec_reg [31:2], 2'b0}; //This state only handles synchronous traps
+                            state = FETCH;
                         end
                     endcase
                 end
-                default:
-                begin
-                    //Trigger Illegal Instruction exeption
-                    state = TRAP;
-                    internal_cause <= MCAUSE_ILLEGAL_INS;
-                    internal_mtval = IR; 
-                end
-            endcase
-        end
-        INC: //Increment Program counter
-        begin
-            //Disable write to register file signal, so we dont write other values that we dont want to write.
-            wr = 1'b0;
-            csr_write = 1'b0;
-            if(count > 31)
-            begin
-                state = FETCH;
-                            //$display("--------------REG DUMP--------------");
-                            //Display all registers
-                            //for(int i = 0;i < 8;i++)
-                            //begin
-                            //    $display("r%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x\tr%02d: 0x%08x", i, debug_reg[i], i+8, debug_reg[i+8], i+16, debug_reg[i+16], i+24, debug_reg[i+24]);                            
-                            //end
-                            //$display("pc: 0x%08x", PC);                            
             end
-            else
-            begin
-                count = count + 1;
-                carry = cout;
-                PC[31:0] = {add, PC[31:1]}; //It should end up in the same position
-            end
-        end
-        //This is the state that handles illegal instruction exeptions
-        TRAP:
-        begin
-            // $display("TRAP EXECUTED");
-            // $display("\t\tPC %08x", PC);                            
-            // $display("\t\tCAUSE %08x", internal_cause);                            
-            // $display("\t\mtval %08x", internal_mtval);                            
-            //$display("*IGNORED*");
-            wr = 1'b0;
-            csr_write = 1'b0;
-            trap_sig = 1'b1;
-            unique case(trap_state)
-                WRITE_CSR:
-                begin
-                    trap_sig = 1'b1;     
-                    trap_state = SET_PC;       
-                end
-                SET_PC:
-                begin
-                    trap_sig = 1'b0;            
-                    //Depending on the mode that executes it
-                    if(mtvec_reg [1:0] == TRAP_DIRECT)
-                    begin
-                        PC = {mtvec_reg [31:2], 2'b0};
-                        $display("PC set to 0x%08x", {mtvec_reg [31:2], 2'b0});         
-                    end
-                    else if(mtvec_reg [1:0] == TRAP_VECTORED & internal_cause[31:31]) //Only do vectored on synchronous traps
-                    begin
-                        $display("PC set to 0x%08x", {mtvec_reg [31:2], 2'b0} + {internal_cause [29:0], 2'b0});         
-                        PC = {mtvec_reg [31:2], 2'b0} + {internal_cause [29:0], 2'b0};
-                    end
-                    else
-                    begin
-                        PC = {mtvec_reg [31:2], 2'b0};
-                    end
-                    state = FETCH;
-                end
-            endcase
-        end
-    endcase
+        endcase
+    end
 end
 
 assign pc = PC;

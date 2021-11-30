@@ -4,6 +4,7 @@
 module alu
 (
     input  logic        clk,
+    input  logic        rst,
     input  logic [31:0] rs1,
     input  logic [31:0] rs2,
     output logic [31:0] rd,
@@ -104,79 +105,86 @@ scmp scmp_0(
 
 always@(posedge clk)
 begin
-    case(state)
-        IDDLE:
-        begin
-            done = 1'b0;
-            //Initial Carry 1 if sub
-            if(op == SUB)
+    if(rst)
+    begin
+        state = IDDLE;
+    end
+    else
+    begin
+        
+        case(state)
+            IDDLE:
             begin
-                carry = 1'b1;
-                sub_enable = 1'b1;
+                done = 1'b0;
+                //Initial Carry 1 if sub
+                if(op == SUB)
+                begin
+                    carry = 1'b1;
+                    sub_enable = 1'b1;
+                end
+                else
+                begin
+                    carry = 1'b0;
+                    sub_enable = 1'b0;
+                end
+                if(op == SRA)
+                begin
+                    signb = rs1[31:31];
+                end
+    
+                if(op == SLT)
+                begin
+                    ase = rs1[31:31];
+                    bse = rs2[31:31];
+                end
+                else
+                begin
+                    ase = 1'b0;
+                    bse = 1'b0;
+                end
+    
+                if(start)
+                begin
+                    state = COMPUTE;
+                    op_r = op;
+                    index = 0;
+                    bai = 0;
+                    abi = 0;
+                    eqi = 1'b1;
+                end 
             end
-            else
+            COMPUTE:
             begin
-                carry = 1'b0;
-                sub_enable = 1'b0;
-            end
-            if(op == SRA)
-            begin
-                signb = rs1[31:31];
-            end
-
-            if(op == SLT)
-            begin
-                ase = rs1[31:31];
-                bse = rs2[31:31];
-            end
-            else
-            begin
-                ase = 1'b0;
-                bse = 1'b0;
-            end
-
-            if(start)
-            begin
-                state = COMPUTE;
-                op_r = op;
-                index = 0;
-                bai = 0;
-                abi = 0;
-                eqi = 1'b1;
-            end 
-        end
-        COMPUTE:
-        begin
-            if((op_r == SRL) | (op_r == SRA))
-            begin
-                if(index >= (31 + rs2[4:0]))
+                if((op_r == SRL) | (op_r == SRA))
+                begin
+                    if(index >= (31 + rs2[4:0]))
+                    begin
+                        state = IDDLE;
+                        done = 1'b1;
+                    end
+                end
+                else if((op_r == SLTU) | (op_r == SLT))
+                begin
+                    if(index == 62)
+                    begin
+                        state = IDDLE;
+                        done = 1'b1;
+                    end
+                end
+                else if(index == 31)
                 begin
                     state = IDDLE;
                     done = 1'b1;
                 end
+    
+                index = index + 1;
+                carry = cout;
+                eqi = eq;
+                bai = ba;
+                abi = ab;
             end
-            else if((op_r == SLTU) | (op_r == SLT))
-            begin
-                if(index == 62)
-                begin
-                    state = IDDLE;
-                    done = 1'b1;
-                end
-            end
-            else if(index == 31)
-            begin
-                state = IDDLE;
-                done = 1'b1;
-            end
-
-            index = index + 1;
-            carry = cout;
-            eqi = eq;
-            bai = ba;
-            abi = ab;
-        end
-    endcase
-
+        endcase
+    end
 end
 
 always@(negedge clk)
