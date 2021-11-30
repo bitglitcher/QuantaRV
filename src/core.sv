@@ -1,5 +1,5 @@
 //Author: Benjamin Herrera Navarro
-//Wed Jun 16 9:36
+//Wed Jun 16 9:36AM
 
 import global_pkg::*;
 
@@ -8,6 +8,7 @@ module core
     input clk,
     input rst,
 
+    input irq,
 
     //Wishbone interface
     input  logic        ACK,
@@ -48,6 +49,7 @@ logic [31:0] rs1_d;
 logic [31:0] rs2_d;
 logic [31:0] rd_d;
 logic [31:0] alu_out;
+logic [31:0] csr_out;
 logic [2:0] funct3_cu;
 
 regfile_src_t regfile_src;
@@ -57,6 +59,8 @@ sr1_src_t sr1_src;
 logic bu_start;
 logic bu_done;
 logic jump;
+
+logic [31:0] [31:0] debug_reg;
 
 control_unit control_unit_0
 (
@@ -97,7 +101,17 @@ control_unit control_unit_0
     //Control signals for the branch unit
     .bu_start(bu_start),
     .jump(jump),
-    .bu_done(bu_done)
+    .bu_done(bu_done),
+
+    .debug_reg(debug_reg),
+    
+    //CSR data in, data out
+    .csr_out(csr_out),
+    .rs1_d(rs1_d),
+
+    //Timer interrupt input
+    .timer_interrupt(irq),
+    .external_interrupt(1'b0)
 );
 
 logic [31:0] IR;
@@ -132,6 +146,7 @@ decoder decoder_0
 branch_unit branch_unit_0
 (
     .clk(clk),
+    .rst(rst),
     .start(bu_start),
     .rs1(rs1_d),
     .rs2(rs2_d),
@@ -160,7 +175,7 @@ always_comb begin
             //AUIPC_SRC: rd_d = u_imm + pc; //AUIPC
             LOAD_SRC: rd_d = load_data; //LOAD
             //PC_SRC:    rd_d = pc + 4; //JALR
-            //CSR_SRC:   rd_d = 32'haeaeaeae;
+            CSR_SRC:   rd_d = csr_out;
             default: rd_d = 32'b0;
     endcase
 end
@@ -203,6 +218,7 @@ end
 alu alu_0
 (
     .clk(clk),
+    .rst(rst),
     .rs1(alu_src1),
     .rs2(alu_src2),
     .rd(alu_out),
@@ -223,7 +239,7 @@ begin
         //This operations should use the ALU to calculate values instead
         LOAD_DATA: address_ld = rs1_d + 32'($signed(i_imm));
         STORE_DATA: address_ld = rs1_d + 32'($signed(s_imm));
-        //MEM_NONE: address_ld = 32'b0;
+        MEM_NONE: address_ld = 32'b0;
     endcase
 end
 
