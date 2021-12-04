@@ -70,13 +70,13 @@ reg [7:0] control_register;
 
 wire [7:0] control_register_read;
 assign control_register_read = {
-    tx_empty,
-    tx_full,
-    rx_empty,
-    rx_full,
-    control_register[4:4],
+    control_register [7:6],
     1'b0,
-    control_register [7:6]
+    control_register[4:4],
+    rx_full,
+    rx_empty,
+    tx_full,
+    tx_empty
 };
 
 wire BB_state = control_register [7:6];
@@ -109,16 +109,24 @@ logic [7:0] tx_fifo_rd_data;
 //tx_fifo write and read
 always@(negedge clk)
 begin
-    //Write to fifo
-    if(tx_fifo_wr & (((tx_wp + 7'b1) != tx_rp) | tx_fifo_rd))
+    if(rst)
     begin
-        tx_fifo [tx_wp] <= tx_fifo_wr_data;
-        tx_wp <= tx_wp + 1;
+        tx_wp = 0;
+        tx_rp = 0;
     end
-    //Read data
-    if(tx_fifo_rd & (tx_rp != tx_wp))
+    else
     begin
-        tx_rp <= tx_rp + 1;    
+        //Write to fifo
+        if(tx_fifo_wr & ((3'(tx_wp + 3'b1) != tx_rp) | tx_fifo_rd))
+        begin
+            tx_fifo [tx_wp] <= tx_fifo_wr_data;
+            tx_wp <= tx_wp + 1;
+        end
+        //Read data
+        if(tx_fifo_rd & (tx_rp != tx_wp))
+        begin
+            tx_rp <= tx_rp + 1;    
+        end
     end
 end
 assign tx_fifo_rd_data = tx_fifo[tx_rp];
@@ -134,20 +142,28 @@ logic [8:0] rx_fifo_rd_data;
 //rx_fifo write and read
 always@(negedge clk)
 begin
-    //Write to fifo 
-    if(rx_fifo_wr & ((3'(rx_wp + 3'b1) != rx_rp) | rx_fifo_rd))
+    if(rst)
     begin
-        rx_fifo [rx_wp] <= rx_fifo_wr_data;
-        rx_wp <= rx_wp + 1;
+        rx_wp = 0;
+        rx_rp = 0;
     end
-    //Read data
-    if(rx_fifo_rd & (rx_rp != rx_wp))
+    else
     begin
-        rx_rp <= rx_rp + 1;    
+        //Write to fifo 
+        if(rx_fifo_wr & ((3'(rx_wp + 3'b1) != rx_rp) | rx_fifo_rd))
+        begin
+            rx_fifo [rx_wp] <= rx_fifo_wr_data;
+            rx_wp <= rx_wp + 1;
+        end
+        //Read data
+        if(rx_fifo_rd & (rx_rp != rx_wp))
+        begin
+            rx_rp <= rx_rp + 1;    
+        end
     end
 end
 assign rx_fifo_rd_data = rx_fifo[rx_rp];
-wire rx_full = ((rx_wp + 1) == rx_rp);
+wire rx_full = (3'(rx_wp + 3'b1) == rx_rp);
 wire rx_empty = (rx_rp == rx_wp);
 logic [7:0] rx_capacity;
 assign rx_capacity = $unsigned(rx_wp - rx_rp);
@@ -323,7 +339,7 @@ begin
                                         ERR = 1'b0;
                                         RTY = 1'b0;
                                         wb_state = CYCLE;
-                                        DAT_I = {rx_fifo_rd_data, 23'b0};
+                                        DAT_I = {23'b0, rx_fifo_rd_data};
                                         rx_fifo_rd = 1'b1;
                                     end
                                 end
@@ -365,7 +381,7 @@ begin
                                         ERR = 1'b0;
                                         RTY = 1'b0;
                                         wb_state = CYCLE;
-                                        DAT_I = {rx_fifo_rd_data, 23'b0};
+                                        DAT_I = {23'b0, rx_fifo_rd_data};
                                         rx_fifo_rd = 1'b1;
                                     end
                                 end
@@ -381,7 +397,7 @@ begin
                         end
                         8'h08: 
                         begin
-                            DAT_I = {control_register_read, 24'b0};
+                            DAT_I = {24'b0, control_register_read};
                             ACK = 1'b1;
                             ERR = 1'b0;
                             RTY = 1'b0;
@@ -389,7 +405,7 @@ begin
                         end
                         8'h0c: 
                         begin
-                            DAT_I = {rx_capacity , 24'b0};
+                            DAT_I = {24'b0, rx_capacity};
                             ACK = 1'b1;
                             ERR = 1'b0;
                             RTY = 1'b0;
@@ -397,7 +413,7 @@ begin
                         end
                         8'h10:
                         begin
-                            DAT_I = {tx_capacity , 24'b0};
+                            DAT_I = {24'b0, tx_capacity};
                             ACK = 1'b1;
                             ERR = 1'b0;
                             RTY = 1'b0;
@@ -599,6 +615,9 @@ begin
         case(state_rx)
         IDDLE:
         begin
+            rx_fifo_wr = 1'b0;
+            rx_shift_reg = 0;
+            rx_counter = 0;
             if(~rx)
             begin
                 state_rx = START;
@@ -608,6 +627,7 @@ begin
         end
         START:
         begin
+            rx_shift_reg = rx_shift_reg;
             if(divisor > rx_counter)
             begin
                 rx_counter = rx_counter + 1;
@@ -621,17 +641,21 @@ begin
         end
         TRANSFER:
         begin
-            if((divisor >> 1) > rx_counter)
+            if(divisor > rx_counter)
             begin
+                //Sample the rx signal
+                if((divisor >> 1) == rx_counter)
+                begin
+                    rx_shift_reg = {rx, rx_shift_reg [8:1]};
+                end
                 rx_counter = rx_counter + 1;
             end
             else
             begin
-                //Sample the rx signal
+                rx_shift_reg = rx_shift_reg;
                 if(rx_bit_counter <= 7)
                 begin
                     rx_bit_counter = rx_bit_counter + 1;
-                    rx_shift_reg = {rx_shift_reg [7:0], rx};
                     state_rx = TRANSFER;
                     rx_counter = 0;
                 end
@@ -645,41 +669,68 @@ begin
         end
         PARITY:
         begin
-            if((divisor >> 1) > rx_counter)
+            if(PE_state)
             begin
-                rx_counter = rx_counter + 1;
+                if(divisor > rx_counter)
+                begin
+                    //Sample the rx signal
+                    if((divisor >> 1) == rx_counter)
+                    begin
+                        rx_shift_reg = {rx, rx_shift_reg [8:1]};
+                    end
+                    rx_counter = rx_counter + 1;
+                end
+                else
+                begin
+                    state_rx = STOP;
+                    rx_bit_counter = 0;
+                    rx_shift_reg = rx_shift_reg;
+                    rx_counter = 0;
+                end
             end
             else
             begin
-                rx_shift_reg = {rx_shift_reg [7:0], rx};
                 state_rx = STOP;
                 rx_bit_counter = 0;
+                rx_shift_reg = rx_shift_reg;
                 rx_counter = 0;
             end
         end
         STOP:
         begin
-            if((divisor >> 1) > rx_counter)
+            rx_shift_reg = rx_shift_reg;
+            if(stop_bits == 0)
             begin
-                rx_counter = rx_counter + 1;
+                rx_fifo_wr_data = rx_shift_reg;
+                rx_fifo_wr = 1'b1;
+                state_rx = IDDLE;
+                rx_bit_counter = 0;
+                rx_counter = 0;
             end
             else
             begin
-                //Sample the rx signal
-                if(rx_bit_counter <= stop_bits)
+                if(divisor > rx_counter)
                 begin
-                    rx_bit_counter = rx_bit_counter + 1;
-                    state_rx = STOP;
-                    rx_counter = 0;
+                    rx_counter = rx_counter + 1;
                 end
                 else
                 begin
-                    rx_fifo_wr_data = rx_shift_reg;
-                    rx_fifo_wr = 1'b1;
-                    state_rx = IDDLE;
-                    rx_bit_counter = 0;
-                    rx_counter = 0;
-                end
+                    //Sample the rx signal
+                    if(rx_bit_counter >= stop_bits)
+                    begin
+                        rx_fifo_wr_data = rx_shift_reg;
+                        rx_fifo_wr = 1'b1;
+                        state_rx = IDDLE;
+                        rx_bit_counter = 0;
+                        rx_counter = 0;
+                    end
+                    else
+                    begin
+                        rx_bit_counter = rx_bit_counter + 1;
+                        state_rx = STOP;
+                        rx_counter = 0;
+                    end
+                end                
             end
         end
         default:
@@ -701,6 +752,15 @@ assign txbytes [4] = tx_fifo [4];
 assign txbytes [5] = tx_fifo [5];
 assign txbytes [6] = tx_fifo [6];
 assign txbytes [7] = tx_fifo [7];
+reg [8:0] [7:0] rxbytes;
+assign rxbytes [0] = rx_fifo [0];
+assign rxbytes [1] = rx_fifo [1];
+assign rxbytes [2] = rx_fifo [2];
+assign rxbytes [3] = rx_fifo [3];
+assign rxbytes [4] = rx_fifo [4];
+assign rxbytes [5] = rx_fifo [5];
+assign rxbytes [6] = rx_fifo [6];
+assign rxbytes [7] = rx_fifo [7];
 initial begin
     ACK = 0;
     ERR = 0;
