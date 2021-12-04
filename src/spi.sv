@@ -63,8 +63,8 @@ module spi(
 //
 
 reg [15:0] conf_reg;
-logic CPOL = conf_reg [0:0];
-logic CPHA = conf_reg [1:1];
+logic CPOL = conf_reg [0:0]; //Clock Iddle state
+logic CPHA = conf_reg [1:1]; //Data Change on trailing edge
 logic TXQE = conf_reg [2:2];
 logic RXQE = conf_reg [3:3];
 logic TBM  = conf_reg [4:4];
@@ -234,7 +234,19 @@ begin
         case(spi_states)
             IDDLE:
             begin
-
+				//Set SCLOCK to CPOL
+				SCLK <= CPOL;
+				if(!tx_empty)
+				begin
+					//Set rx buffer load data signal
+					tx_fifo_rd = 1'b1;
+					//Load data into shift register
+					shift_reg <= tx_fifo_rd_data;
+				end
+				else
+				begin
+					spi_states <= spi_states;
+				end
             end
             DELAY:
             begin
@@ -242,7 +254,7 @@ begin
                 //operation
                 if(delay_counter > twp)
                 begin
-                    spi_states = TRANSMIT;
+                    spi_states <= TRANSMIT;
                 end
                 else
                 begin
