@@ -55,7 +55,7 @@ logic tx;
 logic spi_master_clk;
 logic spi_master_cs_n;
 logic spi_master_mosi;
-logic spi_master_miso;
+wire spi_master_miso = 0;
 
 //GPIO
 logic [31:0] gpio;
@@ -245,6 +245,30 @@ ram #(.SIZE(32'hfff)) ram0
     .DAT_O(DAT_O),
     .CTI_O(CTI_O),
     .WE(WE)
+);
+
+
+spi spi_0(
+    .clk(clk_gen),
+    .rst(rst_gen),
+
+    //SPI Signals
+    .MISO(spi_master_miso),
+    .MOSI(spi_master_mosi),
+    .SCLK(spi_master_clk),
+    .CS(spi_master_cs_n),
+
+    //WIshbone BUS
+    .ACK(ack_spi),
+    .ERR(err_spi),
+    .RTY(rty_spi),
+    .STB(stb_spi),
+    .CYC(CYC),
+    .WE(WE),
+    .ADR(ADR),
+    .DAT_O(DAT_O),
+    .DAT_I(data_r_spi),
+    .CTI_O(CTI_O)
 );
 
 timer timer_0
