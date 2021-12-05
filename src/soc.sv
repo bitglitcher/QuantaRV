@@ -55,7 +55,7 @@ logic tx;
 logic spi_master_clk;
 logic spi_master_cs_n;
 logic spi_master_mosi;
-logic spi_master_miso;
+wire spi_master_miso = 0;
 
 //GPIO
 logic [31:0] gpio;
@@ -247,16 +247,16 @@ ram #(.SIZE(32'hfff)) ram0
     .WE(WE)
 );
 
-spi spi_0
-(
-	.clk(clk_gen),
+
+spi spi_0(
+    .clk(clk_gen),
     .rst(rst_gen),
 
     //SPI Signals
-    .MISO(spi_master_clk),
-    .MOSI(spi_master_cs_n),
-    .SCLK(spi_master_mosi),
-    .CS(spi_master_miso),
+    .MISO(spi_master_miso),
+    .MOSI(spi_master_mosi),
+    .SCLK(spi_master_clk),
+    .CS(spi_master_cs_n),
 
     //WIshbone BUS
     .ACK(ack_spi),
