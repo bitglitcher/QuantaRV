@@ -2,6 +2,7 @@
 //Fri Jun 4, 4:40PM
 
 `include "debug_def.sv"
+
 module regfile
 (
     input logic clk,
@@ -13,8 +14,8 @@ module regfile
     output logic [31:0] rs1_d,
     output logic [31:0] rs2_d
 
-        ,output logic [31:0][31:0] debug_reg
     `ifdef __sim__
+    ,output logic [31:0][31:0] debug_reg
     `endif
 );
 
