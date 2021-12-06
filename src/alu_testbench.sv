@@ -60,6 +60,8 @@ states_t state = START;
 parameter N_TESTS = 32;
 
 reg [31:0] counter = 0;
+reg [63:0] passes = 0;
+reg [63:0] print_next = 10000;
 
 task automatic print_error(rd, rs1, rs2);
     $display("Error: RD value is 0x%08x but expected 0x%08x", rd, rs1 + rs2);
@@ -73,6 +75,16 @@ endtask //automatic
 
 always@(negedge clk)
 begin
+    if(passes >= print_next)
+    begin
+        print_next = print_next + 10000;
+        $display("Passes %d/%d", passes, 1000000);
+        if(passes > 1000000) 
+        begin
+            $display("TEST SUCCESSFUL");
+            $stop;
+        end
+    end
     case(state)
         START:
         begin
@@ -161,6 +173,7 @@ begin
                                 counter = 0;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -177,7 +190,7 @@ begin
 
                     SUB:
                     begin
-                        if(rd == (rs1 - rs2))
+                        if(rd == ($signed(rs1) - $signed(rs2)))
                         begin
                             $display("SUB PASS: RD value is 0x%08x and expected 0x%08x", rd, rs1 - rs2);
                             rs1 = $urandom();
@@ -188,6 +201,7 @@ begin
                                 counter = 0;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -215,6 +229,7 @@ begin
                                 counter = 0;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -242,6 +257,7 @@ begin
                                 counter = 0;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -268,6 +284,7 @@ begin
                                 test_ops = SRL;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -294,6 +311,7 @@ begin
                                 test_ops = SLL;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -320,6 +338,7 @@ begin
                                 test_ops = SRA;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -346,6 +365,7 @@ begin
                                 test_ops = SLTU;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -372,6 +392,7 @@ begin
                                 test_ops = SLT;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -398,6 +419,7 @@ begin
                                 test_ops = ADD;
                             end
                             counter = counter + 1;
+                            passes = passes + 1;
                         end
                         else 
                         begin
@@ -411,7 +433,6 @@ begin
                             $stop;
                         end
                     end
-
                 endcase
                 state = START;
             end
