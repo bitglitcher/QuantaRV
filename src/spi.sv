@@ -105,10 +105,10 @@ reg [7:0] tx_fifo [buffer_depth-1:0];
 reg [7:0] rx_fifo [buffer_depth-1:0];
 
 //Read and Write pointers
-reg [$clog2(buffer_depth)-1:0] tx_wp = 0;
-reg [$clog2(buffer_depth)-1:0] tx_rp = 0;
-reg [$clog2(buffer_depth)-1:0] rx_wp = 0;
-reg [$clog2(buffer_depth)-1:0] rx_rp = 0;
+reg [$clog2(buffer_depth)-1:0] tx_wp;
+reg [$clog2(buffer_depth)-1:0] tx_rp;
+reg [$clog2(buffer_depth)-1:0] rx_wp;
+reg [$clog2(buffer_depth)-1:0] rx_rp;
 
 
 //Write/Read signals and data buses
@@ -123,8 +123,8 @@ always@(negedge clk)
 begin
     if(rst)
     begin
-        tx_wp = 0;
-        tx_rp = 0;
+        tx_wp <= 0;
+        tx_rp <= 0;
     end
     else
     begin
@@ -160,8 +160,8 @@ always@(negedge clk)
 begin
     if(rst | rx_flush)
     begin
-        rx_rp = 0;
-        rx_wp = 0;
+        rx_rp <= 0;
+        rx_wp <= 0;
     end
     else
     begin
@@ -180,7 +180,7 @@ begin
         rx_full <= (3'(rx_wp + 3'b1) == rx_rp);
         rx_empty <= (rx_rp == rx_wp);
     end
-end;
+end
 logic [7:0] rx_capacity;
 always_comb rx_capacity = $unsigned(rx_wp - rx_rp);
 
@@ -388,7 +388,7 @@ begin
                                             ERR = 1'b1;
                                             RTY = 1'b0;
                                             ACK = 1'b0;
-                                            tx_fifo_rd = 1'b0;
+                                            rx_fifo_rd = 1'b0;
                                         end
                                     end
                                     BM_RTY:
