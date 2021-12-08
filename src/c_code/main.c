@@ -161,30 +161,30 @@ int main(void) {
     uart_puts("Testing SDRAM...\n");
     for(int i = SDRAM_BASE;i < SDRAM_END;i=i+4)
     {
-		uart_puts("Testing Address 0x");
-		itoa(i, buffer, 16);
-		uart_puts(buffer);
-		*((uint32_t*)(i)) = i; //Assign it to its own address
-   		//Read back and cofirm value
-		if(*((uint32_t*)(i)) != i)
-		{
-			uart_puts("Error writting to 0x");
-			itoa(i, buffer, 16);
-			uart_puts(buffer);
-			uart_puts("SDRAM Memory Test Failed\n");
-			;
-		}	
-		else
-		{
-			uart_puts(" D: 0x");
-		       	itoa(*((uint32_t*)(i)), buffer, 16);
-			uart_puts(buffer);
-			uart_puts("\r");
-		}
-	}
-	uart_puts("SDRAM test finished");
+        uart_puts("Testing Address 0x");
+        itoa(i, buffer, 16);
+        uart_puts(buffer);
+        *((uint32_t*)(i)) = i; //Assign it to its own address
+        //Read back and cofirm value
+        if(*((uint32_t*)(i)) != i)
+        {
+            uart_puts("Error writting to 0x");
+            itoa(i, buffer, 16);
+            uart_puts(buffer);
+            uart_puts("SDRAM Memory Test Failed\n");
+            ;
+        }   
+        else
+        {
+            uart_puts(" D: 0x");
+                itoa(*((uint32_t*)(i)), buffer, 16);
+            uart_puts(buffer);
+            uart_puts("\r");
+        }
+    }
+    uart_puts("SDRAM test finished");
     while(1);
-	
+    
 /*
     while(1)
     {
