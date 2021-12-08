@@ -27,6 +27,9 @@ module soc
     `endif
 );
 
+
+parameter SDRAM_LENGHT = 4096;
+
 logic        ACK;
 logic        ERR;
 logic        RTY;
@@ -116,33 +119,38 @@ logic timer_irq;
 //  0x1100-0x11ff   UART
 //  0x1200-0x12ff   Timer
 //  0x1300-0x13ff   GPIO
-
+//  0x1400-0xXXXX   SDRAM
 logic [31:0] data_r_onchip_ram;
 logic [31:0] data_r_spi;
 logic [31:0] data_r_uart;
 logic [31:0] data_r_timer;
 logic [31:0] data_r_gpio;
+logic [31:0] data_r_sdram;
 logic ack_onchip_ram;
 logic ack_spi;
 logic ack_uart;
 logic ack_timer;
 logic ack_gpio;
+logic ack_sdram;
 logic err_onchip_ram;
 logic err_spi;
 logic err_uart;
 logic err_timer;
 logic err_gpio;
+logic err_sdram;
 logic rty_onchip_ram;
 logic rty_spi;
 logic rty_uart;
 logic rty_timer;
 logic rty_gpio;
+logic rty_sdram;
 
 logic stb_onchip_ram;
 logic stb_spi;
 logic stb_uart;
 logic stb_timer;
 logic stb_gpio;
+logic stb_sdram;
 
 logic to_cpu_ack;
 logic to_cpu_rty;
@@ -163,6 +171,7 @@ always_comb begin
             stb_uart = 1'b0;
             stb_timer = 1'b0;
             stb_gpio = 1'b0;
+			stb_sdram = 1'b0;
         end
         //SPI
         else if((ADR >= 32'h1000) & (ADR <= 32'h10ff))
@@ -176,6 +185,7 @@ always_comb begin
             stb_uart = 1'b0;
             stb_timer = 1'b0;
             stb_gpio = 1'b0;
+			stb_sdram = 1'b0;
         end
         //UART
         else if((ADR >= 32'h1100) & (ADR <= 32'h11ff))
@@ -189,6 +199,7 @@ always_comb begin
             stb_uart = STB;
             stb_timer = 1'b0;
             stb_gpio = 1'b0;
+			stb_sdram = 1'b0;
         end
         //Timer
         else if((ADR >= 32'h1200) & (ADR <= 32'h12ff))
@@ -202,6 +213,7 @@ always_comb begin
             stb_uart = 1'b0;
             stb_timer = STB;
             stb_gpio = 1'b0;
+			stb_sdram = 1'b0;
         end
         //GPIO
         else if((ADR >= 32'h1300) & (ADR <= 32'h13ff))
@@ -215,6 +227,21 @@ always_comb begin
             stb_uart = 1'b0;
             stb_timer = 1'b0;
             stb_gpio = STB;
+			stb_sdram = 1'b0;
+        end
+		//SDRAM
+		else if((ADR >= 32'h1400) & (ADR <= 32'hffff))
+		begin
+			to_cpu_data = data_r_sdram;
+			to_cpu_ack = ack_sdram;
+			to_cpu_rty = rty_sdram;
+			to_cpu_err = err_sdram;
+			stb_onchip_ram = 1'b0;
+			stb_spi = 1'b0;
+			stb_uart = 1'b0;
+			stb_timer = 1'b0;
+			stb_gpio = 1'b0;
+			stb_sdram = STB;
         end
         //Address access error
         else
@@ -228,6 +255,7 @@ always_comb begin
             stb_uart = 1'b0;
             stb_timer = 1'b0;
             stb_gpio = 1'b0;
+		    stb_sdram = 1'b0;
         end
     end
 
@@ -309,6 +337,66 @@ uart uart_0
     //Uart signals
     .tx(tx),
     .rx(rx)
+);
+
+
+//Signals that will connect the cache to the memory controller
+logic sdram_ack;
+logic sdram_stb;
+logic sdram_err;
+logic sdram_rty;
+logic sdram_cyc;
+logic [31:0] sdram_dat_o;
+logic [31:0] sdram_dat_i;
+logic [31:0] sdram_adr;
+logic sdram_we;
+logic [2:0] sdram_cti_o;
+
+//Small cache for the SDRAM Controller
+cache cache_0
+(
+	.clk(clk_gen),
+	.rst(rst_gen),
+	.S_ACK(ack_sdram),
+    .S_ERR(err_sdram),
+    .S_RTY(rty_sdram),
+    .S_STB(stb_sdram),
+    .S_CYC(CYC),
+    .S_ADR(ADR),
+    .S_DAT_I(data_r_sdram),
+    .S_DAT_O(DAT_O),
+    .S_CTI_O(CTI_O),
+    .S_WE(WE),
+ 
+
+    //Master Memory Controller BUS
+	.M_ACK(sdram_ack),
+	.M_ERR(sdram_err),
+	.M_RTY(sdran_rty),
+	.M_STB(sdram_stb),
+	.M_CYC(sdram_cyc),
+	.M_ADR(sdram_adr),
+	.M_DAT_I(sdram_dat_i),
+	.M_DAT_O(sdram_dat_o),
+	.M_CTI_O(sdram_cti_o),
+	.M_WE(sdram_we)
+);
+
+//Emulated SDRAM controller for testing purposes of the cache
+
+ram #(.SIZE(32'hffff)) ram1
+(
+    .clk(clk_gen),
+    .ACK(sdram_ack),
+    .ERR(sdram_err),
+    .RTY(sdram_rty),
+    .STB(sdram_stb),
+    .CYC(sdram_cyc),
+    .ADR(sdram_adr),
+    .DAT_I(sdram_dat_i),
+    .DAT_O(sdram_dat_o),
+    .CTI_O(sdram_cti_o),
+    .WE(sdram_we)
 );
 
 endmodule

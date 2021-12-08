@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include "uart/uart.h"
 #include "spi/spi.h"
+#include "memory_map.h"
 
 uint32_t read_mvendorid()
 {
@@ -81,7 +83,7 @@ int main(void) {
     spi_set_twp(0);
     spi_set_tx_bm(SPI_BUS_MODE_LCK);
     spi_set_tx_bm(SPI_BUS_MODE_LCK);
-    while (1)
+   /* while (0)
     {
       spi_set_cs(0xf);
       spi_set_cpha(0);
@@ -100,18 +102,19 @@ int main(void) {
       spi_set_cpol(1);
       spi_set_cs(0b11111110);
       spi_send_byte(0b11001010, 1);
-      spi_set_cp(0xf);
+      spi_set_cs(0xf);
       
       spi_set_cpha(1);
       spi_set_cpol(1);
       spi_set_cs(0b11111110);
       spi_send_byte(0b11001010, 1);
       spi_set_cs(0xf);
-    }
+    }*/
     uart_set_baud_rate(115200);
     uart_set_parity(0);
     uart_bus_mode(BUS_LCK);
     uart_set_stop_bits(1);
+    /*
     uart_puts(banner);
     uart_puts("By: Bitglitcher\n\n\n");
 
@@ -134,12 +137,60 @@ int main(void) {
     uart_puts(buffer);
     uart_puts("\n");
     
-
+    //Memory Test
+    //Write a value between 0-2^32-1 and read it back to
+    //test of the memory is being read and written to
+    uart_puts("OnChip Memory: BASE 0x");
+    itoa(OCR_BASE, buffer, 16);
+    uart_puts(buffer);
+    uart_puts(" LENGHT 0x");
+    itoa(OCR_END-OCR_BASE, buffer, 16);
+    uart_puts(buffer);
+    uart_puts("\n");
+    uart_puts("SDRAM        : BASE 0x");
+    itoa(SDRAM_BASE, buffer, 16);
+    uart_puts(buffer);
+    uart_puts(" LENGHT 0x");
+    itoa(SDRAM_END-SDRAM_BASE, buffer, 16);
+    uart_puts(buffer);
+    uart_puts("\n");
+*/
+    char buffer [50];
+    //Separate output
+    uart_puts("--------------------------------\n");
+    uart_puts("Testing SDRAM...\n");
+    for(int i = SDRAM_BASE;i < SDRAM_END;i=i+4)
+    {
+		uart_puts("Testing Address 0x");
+		itoa(i, buffer, 16);
+		uart_puts(buffer);
+		*((uint32_t*)(i)) = i; //Assign it to its own address
+   		//Read back and cofirm value
+		if(*((uint32_t*)(i)) != i)
+		{
+			uart_puts("Error writting to 0x");
+			itoa(i, buffer, 16);
+			uart_puts(buffer);
+			uart_puts("SDRAM Memory Test Failed\n");
+			;
+		}	
+		else
+		{
+			uart_puts(" D: 0x");
+		       	itoa(*((uint32_t*)(i)), buffer, 16);
+			uart_puts(buffer);
+			uart_puts("\r");
+		}
+	}
+	uart_puts("SDRAM test finished");
+    while(1);
+	
+/*
     while(1)
     {
         char c = uart_getc_blocking();
         uart_puts("You typed: ");
         uart_putc(c);
         uart_puts("\n");
-    }
+    }*/
 }
