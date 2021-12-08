@@ -494,6 +494,7 @@ begin
                     tx_shift_reg = tx_fifo_rd_data;
                     tx_data = tx_fifo_rd_data;
                     $write("%c", tx_fifo_rd_data);
+		    $fflush();
                 end
             end
             START:
