@@ -50,6 +50,8 @@ begin
     rst_get = ~rst;
 end
 
+logic clk_pll; //This must be double clk_gen
+
 `ifdef __sim__
 logic rx;
 logic tx;
@@ -70,20 +72,45 @@ initial begin
     $dumpvars(0,soc);
     $display("Initializing Simulations");
     clk_gen = 0;
+    clk_pll = 0;
     rst = 1;
     #10
     clk_gen = ~clk_gen;
+    clk_pll = ~clk_pll;
     rst = 0;
     repeat(10)
     begin
-        #10 clk_gen = ~clk_gen;
+        #5
+		begin
+			clk_pll = ~clk_pll;
+		end
+        #5 
+        begin
+            clk_gen = ~clk_gen;
+            clk_pll = ~clk_pll;
+        end
     end
-    #10
-    clk_gen = ~clk_gen;
+    #5
+    begin
+		clk_pll = ~clk_pll;
+    end
+    #5
+    begin
+		clk_gen = ~clk_gen;
+		clk_pll = ~clk_pll;
+    end
     rst = 1;
     forever begin
-        #10 clk_gen = ~clk_gen;
-    end
+		#5
+		begin
+			clk_pll = ~clk_pll;
+		end
+        #5
+		begin
+			clk_gen = ~clk_gen;
+			clk_pll = ~clk_pll;
+    	end
+	end
 end
 `endif
 
