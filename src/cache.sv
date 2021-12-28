@@ -33,11 +33,15 @@ module cache
     output logic        M_WE
 );
 
-parameter n_rows = (1024/256); //1KB cache with 256Byte blocks 
-parameter n_blocks = 64;
+parameter n_rows = 16; //16 256x32Bit blocks 
+parameter n_blocks = 256;
 parameter block_size = 4; //In bytes
-parameter row_adr_lsb = 8; //log2(block_size)
-parameter row_adr_msb = 9; //log2(block_size) + log2(n_rows) - 1
+parameter row_adr_lsb = 10; //log2(block_size)
+parameter row_adr_msb = 13; //log2(block_size) + log2(n_rows) - 1
+parameter dlsb = 2; //Data lsb 
+parameter dmsb = 9; //Data msb 
+parameter tlsb = 14; //Tag lsb
+parameter tmsb = 31; //Tag msb
 parameter CC  = 3'b000; //Classic Cycle
 parameter CAB = 3'b001; //Constant Address Burst
 parameter IBC = 3'b010; //Incrementing Burst Cycle
@@ -45,20 +49,20 @@ parameter EOB = 3'b111; //End of Cycle
 
 reg dirty [n_rows-1:0];
 reg valid [n_rows-1:0];
-reg [23:0] tag  [n_rows-1:0];
-reg [31:0] data [n_rows-1:0] [$clog2(n_blocks)-1:0];
+reg [17:0] tag  [n_rows-1:0];
+reg [31:0] data [n_rows-1:0] [n_blocks-1:0];
 
 typedef enum logic [3:0] { IDDLE, HIT, MISS_SO, MISS_SC, MISS_FO, MISS_FC } wb_state_t;
 wb_state_t wb_state = IDDLE;
 
-//There is a maximum of 64blocks of 32bit transfers
+//There is a maximum of 256 32bit transfers
 reg [$clog2(n_blocks):0] offset = 0;
 
 always@(posedge clk)
 begin
 	if(rst)
 	begin
-		wb_state = IDDLE;
+		wb_state <= IDDLE;
 	end
 	else
 	begin
@@ -67,25 +71,25 @@ begin
 			begin
 				if(S_STB & S_CYC)
 				begin
-					if((tag [S_ADR[row_adr_msb:row_adr_lsb]] == S_ADR [31:23]) & (valid [S_ADR[row_adr_msb:row_adr_lsb]] == 1))
+					if((tag [S_ADR[row_adr_msb:row_adr_lsb]] == S_ADR [tmsb:tlsb]) & (valid [S_ADR[row_adr_msb:row_adr_lsb]] == 1))
 					begin
 						wb_state <= HIT;
 						if(S_WE)
 						begin
-							data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR[7:2]] = S_DAT_O;
-							dirty [S_ADR[row_adr_msb:row_adr_lsb]] = 1'b1;
+							data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb]] <= S_DAT_O;
+							dirty [S_ADR[row_adr_msb:row_adr_lsb]] <= 1'b1;
 						end
-						else
-						begin
-							S_DAT_I <= data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR[7:2]];
-						end
+						// else
+						// begin
+						// 	S_DAT_I <= data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb]];
+						// end
 						S_ACK <= 1'b1;
 						S_ERR <= 1'b0;
 						S_RTY <= 1'b0;
 					end
 					else
 					begin
-						if((valid [S_ADR[7:0]] == 1) & (dirty [S_ADR[7:0]] == 1))
+						if((valid [S_ADR[row_adr_msb:row_adr_lsb]] == 1) & (dirty [S_ADR[row_adr_msb:row_adr_lsb]] == 1))
 						begin
 							wb_state <= MISS_SO;
 							offset <= 0;
@@ -93,7 +97,7 @@ begin
 							S_ERR <= 1'b0;
 							S_RTY <= 1'b0;
 						end
-						else if((valid [S_ADR[7:0]] == 1) & (dirty [S_ADR[7:0]] == 0))
+						else if((valid [S_ADR[row_adr_msb:row_adr_lsb]] == 1) & (dirty [S_ADR[row_adr_msb:row_adr_lsb]] == 0))
 						begin
 							wb_state <= MISS_FO;
 							offset <= 0;
@@ -135,9 +139,9 @@ begin
 			begin
 				S_DAT_I <= 32'b0;
 
-				if(offset < 64)
+				if(offset < n_blocks)
 				begin
-					//Do a 256 byte fetch
+					//Do a 256*32fetch
 					M_STB <= 1'b1;
 					M_CYC <= 1'b1;
 					M_CTI_O <= IBC; //Incrementing Burst Cycle
@@ -185,14 +189,14 @@ begin
 			MISS_SC:
 			begin
 				wb_state <= MISS_SO;
-				M_STB = 1'b0;
+				M_STB <= 1'b0;
 				offset <= offset + 1;
-				M_CYC = 1'b1;
-				M_CTI_O = IBC;
+				M_CYC <= 1'b1;
+				M_CTI_O <= IBC;
 			end
 			MISS_FO:
 			begin
-				if(offset < 64)
+				if(offset < n_blocks)
 				begin
 					//Fetch block into cache memory
 					M_STB <= 1'b1;
@@ -200,7 +204,7 @@ begin
 					M_ADR <= tag [S_ADR[row_adr_msb:row_adr_lsb]] + (offset << 2);
 					M_CTI_O = IBC;
 					wb_state <= MISS_FC;
-					data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR[7:2] + offset] = M_DAT_I;
+					data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb] + offset] <= M_DAT_I;
 					if(M_ACK)
 					begin
 						wb_state <= MISS_FC;
@@ -230,7 +234,6 @@ begin
 					begin
 						wb_state <= MISS_FO;
 					end
-;
 				end
 				else
 				begin
@@ -241,17 +244,17 @@ begin
 					M_STB <= 1'b0;
 					if(S_WE)
 					begin
-						data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR[7:2]] = S_DAT_O;
-					dirty [S_ADR[row_adr_msb:row_adr_lsb]] = 1'b1;
+						data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb]] <= S_DAT_O;
+						dirty [S_ADR[row_adr_msb:row_adr_lsb]] <= 1'b1;
 					end
 					else
 					begin
-						S_DAT_I <= data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR[7:2]];
-						dirty [S_ADR[row_adr_msb:row_adr_lsb]] = 1'b0;
+						//S_DAT_I <= data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb]];
+						dirty [S_ADR[row_adr_msb:row_adr_lsb]] <= 1'b0;
 					end
 					wb_state <= IDDLE;
-					valid [S_ADR[row_adr_msb:row_adr_lsb]] = 1'b1;
-					tag [S_ADR[row_adr_msb:row_adr_lsb]] = S_ADR [31:23];
+					valid [S_ADR[row_adr_msb:row_adr_lsb]] <= 1'b1;
+					tag [S_ADR[row_adr_msb:row_adr_lsb]] <= S_ADR [tmsb:tlsb];
 				end
 			end
 			MISS_FC:
@@ -264,8 +267,12 @@ begin
 			end
 		endcase
 	end	
+	S_DAT_I <= data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb]];
 end
 
+`include "debug_def.sv"
+
+`ifdef __sim__
 //On simulation initialize them all to 0 
 initial
 begin
@@ -276,4 +283,6 @@ begin
 		tag [i] = 0;
 	end
 end
+`endif
+
 endmodule
