@@ -33,14 +33,14 @@ module cache
     output logic        M_WE
 );
 
-parameter n_rows = 16; //16 256x32Bit blocks 
+parameter n_rows = 8; //8 256x32Bit blocks 
 parameter n_blocks = 256;
 parameter block_size = 4; //In bytes
 parameter row_adr_lsb = 10; //log2(block_size)
-parameter row_adr_msb = 13; //log2(block_size) + log2(n_rows) - 1
+parameter row_adr_msb = 12; //log2(block_size) + log2(n_rows) - 1
 parameter dlsb = 2; //Data lsb 
 parameter dmsb = 9; //Data msb 
-parameter tlsb = 14; //Tag lsb
+parameter tlsb = 13; //Tag lsb
 parameter tmsb = 31; //Tag msb
 parameter CC  = 3'b000; //Classic Cycle
 parameter CAB = 3'b001; //Constant Address Burst
@@ -49,7 +49,7 @@ parameter EOB = 3'b111; //End of Cycle
 
 reg dirty [n_rows-1:0];
 reg valid [n_rows-1:0];
-reg [17:0] tag  [n_rows-1:0];
+reg [tmsb-tlsb:0] tag  [n_rows-1:0];
 reg [31:0] data [n_rows-1:0] [n_blocks-1:0];
 
 typedef enum logic [3:0] { IDDLE, HIT, MISS_SO, MISS_SC, MISS_FO, MISS_FC } wb_state_t;
@@ -125,7 +125,6 @@ begin
 					M_CTI_O <= IBC;
 					M_ADR <= 32'b0;
 					M_DAT_O <= 32'b0;
-
 				end
 			end
 			HIT:
@@ -149,6 +148,8 @@ begin
 					M_WE <= 1'b1; //Write transfer
 					if(M_ACK)
 					begin
+						M_STB <= 1'b0;
+						M_CYC <= 1'b0;
 						wb_state <= MISS_SC;
 					end
 					else if(M_RTY)
@@ -203,11 +204,12 @@ begin
 					M_CYC <= 1'b1;
 					M_ADR <= tag [S_ADR[row_adr_msb:row_adr_lsb]] + (offset << 2);
 					M_CTI_O = IBC;
-					wb_state <= MISS_FC;
 					data [S_ADR[row_adr_msb:row_adr_lsb]] [S_ADR [dmsb:dlsb] + offset] <= M_DAT_I;
 					if(M_ACK)
 					begin
 						wb_state <= MISS_FC;
+						M_STB <= 1'b0;
+						//M_CYC <= 1'b0;
 					end
 					else if(M_RTY)
 					begin
@@ -276,6 +278,10 @@ end
 //On simulation initialize them all to 0 
 initial
 begin
+	S_ACK = 0;
+	S_ERR = 0;
+	M_WE <= 1'b0;
+	S_RTY = 0;
 	for(int i = 0;i < n_rows;i++)
 	begin
 		dirty [i] = 0;

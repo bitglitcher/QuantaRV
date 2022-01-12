@@ -41,13 +41,20 @@ logic [31:0] DAT_O;
 logic [2:0]  CTI_O;
 logic        WE;
 
+`ifdef __sim__
 logic clk_gen;
 always@(posedge clk) clk_gen = ~clk_gen;
+`else
+pll	pll_inst (
+	.inclk0 ( clk ),
+	.c0 ( clk_gen),
+	);
+`endif
 
-logic rst_get;
+logic rst_gen;
 always@(posedge clk_gen)
 begin
-    rst_get = ~rst;
+    rst_gen = ~rst;
 end
 
 logic clk_pll; //This must be double clk_gen
@@ -118,7 +125,7 @@ end
 core core0
 (
     .clk(clk_gen),
-    .rst(rst_get),
+    .rst(rst_gen),
     .irq(timer_irq),
 
 
@@ -257,7 +264,7 @@ always_comb begin
             stb_sdram = 1'b0;
         end
         //SDRAM
-        else if((ADR >= 32'h1400) & (ADR <= 32'hffff))
+        else if((ADR >= 32'h1400) & (ADR <= 32'h23FF))
         begin
             to_cpu_data = data_r_sdram;
             to_cpu_ack = ack_sdram;
@@ -329,7 +336,7 @@ spi spi_0(
 timer timer_0
 (
     .clk(clk_gen),
-    .rst(rst_get),
+    .rst(rst_gen),
     .ACK(ack_timer),
     .ERR(err_timer),
     .RTY(rty_timer),
@@ -347,7 +354,7 @@ uart uart_0
 (
     //Sys Con
     .clk(clk_gen),
-    .rst(rst_get),
+    .rst(rst_gen),
 
     //Wishbone interface
     .ACK(ack_uart),
@@ -411,7 +418,7 @@ cache cache_0
 
 //Emulated SDRAM controller for testing purposes of the cache
 
-ram #(.SIZE(32'hffff)) ram1
+ram #(.SIZE(32'hfff)) ram1
 (
     .clk(clk_gen),
     .ACK(sdram_ack),
