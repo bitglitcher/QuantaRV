@@ -49,7 +49,7 @@
 // RQFL - Recevier Queue Flush First
 #define SPI_BASE 0x00001000
 //Frequency at which the core is running
-#define SPI_FREQ 25000000
+#define SPI_FREQ 35000000
 
 //Helper macro to calculate the divider value
 #define SPI_DIV_CAL(tF) SPI_FREQ/tF

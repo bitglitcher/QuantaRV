@@ -20,7 +20,7 @@
 #define SDRAM_BASE 0x00001400
 
 //SDRAM 0xEBFF or ~60KB
-#define SDRAM_END  0x0000ffff
+#define SDRAM_END  0x000023FF
 //OnChipRAM 0xfff or 4KB
 #define OCR_END 0x00000fff
 #endif

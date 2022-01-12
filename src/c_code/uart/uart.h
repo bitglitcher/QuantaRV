@@ -38,7 +38,7 @@
 //0x01 Error - Full or empty the uart will return retry
 //0x02 Retry - Full or empty the uart will return error
 //0x03 Ack - Full or empty the uart will return 0 on the bus
-#define FREQUENCY 25000000
+#define FREQUENCY 35000000
 #define UART_BASE 0x1100
 
 #define TXRX          0x00
