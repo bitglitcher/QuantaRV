@@ -1,0 +1,9 @@
+#Simulation files
+a.out
+
+#compilation files
+*.o
+
+#rtl/Altera files
+rtl/
+*.bak
